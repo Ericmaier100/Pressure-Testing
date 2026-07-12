@@ -10,13 +10,15 @@ const TOPICS = [
   "Lateral Systems (Wind & Seismic)",
 ];
 
-const INK = "#0F1F33";
-const INK_2 = "#16294A";
-const LINE = "#E7EEF3";
-const STEEL = "#7C8B9C";
-const AMBER = "#F2A93C";
-const RED = "#C1443B";
-const GREEN = "#4E9B6B";
+// Warm "drafting vellum" palette — cream/tan paper tones instead of dark blueprint
+const PAPER = "#EDE3C8";    // page background
+const PAPER_2 = "#F8F1DE";  // sheet/panel background, lighter cream
+const INK = "#332B1D";      // primary text — dark ink brown
+const LINE = INK;           // kept as an alias so no text ends up unreadable
+const STEEL = "#93805C";    // secondary text, borders — warm taupe
+const AMBER = "#D98E3B";    // accent — warm amber/rust
+const RED = "#B5482F";      // incorrect / weak — terracotta
+const GREEN = "#5C7A52";    // correct / strong — sage green
 
 let idCounter = 300;
 function nextId() {
@@ -33,7 +35,9 @@ const SEED_TEAM = [
 ];
 
 const SEED_BANK = {
-  approved: [
+  // Nothing starts pre-approved — every question waits in the Review Queue until you personally approve it.
+  approved: [],
+  pending: [
     { id: "q1", topic: TOPICS[0], difficulty: "easy", question: "A simply supported beam carries a uniformly distributed load w over span L. Where does the maximum bending moment occur?", options: ["At the supports", "At the quarter points", "At midspan", "It is constant along the span"], correctIndex: 2, explanation: "For a simply supported beam under UDL, shear is zero (and moment is maximum) at midspan by symmetry." },
     { id: "q2", topic: TOPICS[0], difficulty: "medium", question: "Which load combination typically governs design for a low-rise structure in a region with high seismic risk but low wind speed?", options: ["Dead only", "Dead + Live", "Dead + Seismic", "Dead + Wind"], correctIndex: 2, explanation: "Where seismic demand exceeds wind demand, the seismic load combination controls the governing design case." },
     { id: "q3", topic: TOPICS[0], difficulty: "medium", question: "Increasing a beam's moment of inertia while keeping span and load constant primarily reduces which quantity?", options: ["Applied moment", "Deflection", "Reaction forces", "Applied shear"], correctIndex: 1, explanation: "Deflection is inversely proportional to moment of inertia; applied loads and reactions are unaffected." },
@@ -46,8 +50,37 @@ const SEED_BANK = {
     { id: "q12", topic: TOPICS[3], difficulty: "medium", question: "Increasing footing width, all else equal, generally has what effect on settlement under a given bearing pressure?", options: ["No effect", "Increases settlement depth of influence", "Eliminates settlement", "Always decreases total settlement"], correctIndex: 1, explanation: "Wider footings mobilize soil to greater depth, increasing the zone of influence contributing to settlement." },
     { id: "q13", topic: TOPICS[4], difficulty: "easy", question: "In seismic design, the base shear a structure must resist is most directly a function of:", options: ["Roof color", "Building weight and seismic response coefficients", "Window area only", "HVAC load"], correctIndex: 1, explanation: "Base shear is calculated from the structure's seismic weight combined with response coefficients reflecting site and system." },
     { id: "q14", topic: TOPICS[4], difficulty: "medium", question: "Which lateral system typically provides the stiffest response to wind or seismic load in a mid-rise building?", options: ["Moment frame alone", "Shear walls or braced frames", "Unbraced gravity frame", "Flat slab with no walls"], correctIndex: 1, explanation: "Shear walls and braced frames are substantially stiffer than moment frames, reducing lateral drift under equivalent loads." },
-  ],
-  pending: [
+    // Additional original questions — written from general engineering knowledge, not derived from any specific code document or publisher's material
+    { id: "q15", topic: TOPICS[0], difficulty: "easy", question: "For a simply supported beam under a single point load at midspan, where does maximum shear occur?", options: ["At midspan", "At the supports", "At the quarter points", "Shear is uniform along the span"], correctIndex: 1, explanation: "Shear is largest nearest the reactions and jumps at the load point; magnitude peaks at the supports." },
+    { id: "q16", topic: TOPICS[0], difficulty: "medium", question: "Two identical-span beams carry the same uniform load: Beam A is fixed at both ends, Beam B is simply supported. Which has the lower maximum bending moment?", options: ["Beam A (fixed-fixed)", "Beam B (simply supported)", "They are equal", "Cannot be determined"], correctIndex: 0, explanation: "Fixed-end beams develop end moments that reduce the midspan moment relative to a simply supported beam under the same load." },
+    { id: "q17", topic: TOPICS[0], difficulty: "medium", question: "A truss member found to carry zero force under a given load case is called a:", options: ["Redundant member", "Zero-force member", "Compression member", "Tie member"], correctIndex: 1, explanation: "Zero-force members are identified via joint equilibrium, commonly at joints with only two non-collinear members and no external load." },
+    { id: "q18", topic: TOPICS[0], difficulty: "hard", question: "For a statically indeterminate beam, which method directly enforces compatibility of deflections to solve for redundant reactions?", options: ["Method of sections", "Force (flexibility) method", "Direct stiffness only", "Tributary area method"], correctIndex: 1, explanation: "The force method releases redundant reactions and enforces deflection compatibility at those points to solve for them." },
+    { id: "q19", topic: TOPICS[0], difficulty: "easy", question: "Dead load in structural design primarily represents:", options: ["Wind pressure", "The permanent weight of the structure and fixed elements", "Occupancy load that varies over time", "Seismic ground acceleration"], correctIndex: 1, explanation: "Dead load is the fixed, permanent weight of structural and non-structural components." },
+    { id: "q20", topic: TOPICS[0], difficulty: "medium", question: "In load combination design, why are live and wind loads rarely assumed to act at their full magnitude simultaneously?", options: ["Codes ignore wind entirely", "The probability of both peaking at once is low", "Wind load is always larger", "Live load never varies"], correctIndex: 1, explanation: "Load combination factors account for the low joint probability of multiple transient loads reaching their peak at the same time." },
+    { id: "q21", topic: TOPICS[1], difficulty: "easy", question: "What is the primary function of concrete cover over reinforcing steel?", options: ["Improve aesthetics", "Protect steel from corrosion and provide fire resistance", "Increase compressive strength of the concrete", "Reduce self-weight"], correctIndex: 1, explanation: "Cover shields reinforcement from moisture and heat, protecting against corrosion and providing fire resistance." },
+    { id: "q22", topic: TOPICS[1], difficulty: "medium", question: "As concrete compressive strength increases while other variables are held constant, the depth of the flexural compression block generally:", options: ["Increases", "Decreases", "Stays constant", "Becomes negative"], correctIndex: 1, explanation: "Higher concrete strength allows a shallower stress block to develop the same compressive force." },
+    { id: "q23", topic: TOPICS[1], difficulty: "medium", question: "A reinforced concrete column primarily resists axial load through:", options: ["Concrete and steel acting compositely in compression", "Steel alone", "Concrete alone", "Only the outer cover"], correctIndex: 0, explanation: "Column capacity comes from the combined compressive contribution of the concrete and longitudinal steel acting together." },
+    { id: "q24", topic: TOPICS[1], difficulty: "hard", question: "In a two-way concrete slab, punching shear failure occurs around:", options: ["The slab edge only", "The perimeter of a column or concentrated load", "The midspan region", "The slab corners exclusively"], correctIndex: 1, explanation: "Punching shear is a localized failure forming a truncated cone around a column or concentrated load." },
+    { id: "q25", topic: TOPICS[1], difficulty: "easy", question: "Why is reinforcing steel typically placed near the tension face of a concrete beam?", options: ["Concrete is weak in tension, so steel carries the tensile stresses", "Steel is cheaper near the surface", "To reduce curing time", "It has no structural purpose"], correctIndex: 0, explanation: "Concrete resists compression well but cracks under tension, so steel is placed to carry the tensile stresses instead." },
+    { id: "q26", topic: TOPICS[1], difficulty: "medium", question: "Which of the following most directly helps reduce long-term (creep-related) deflection in a reinforced concrete beam?", options: ["Reducing compression steel", "Adding compression reinforcement", "Increasing span length", "Reducing beam width"], correctIndex: 1, explanation: "Compression reinforcement helps restrain long-term creep deflection in concrete beams." },
+    { id: "q27", topic: TOPICS[2], difficulty: "easy", question: "The primary purpose of a base plate under a steel column is to:", options: ["Distribute the column load to the foundation over a larger area", "Increase column height", "Resist wind uplift only", "Reduce steel weight"], correctIndex: 0, explanation: "Base plates spread concentrated column load over a larger foundation area to keep bearing pressure within limits." },
+    { id: "q28", topic: TOPICS[2], difficulty: "medium", question: "For a steel tension member, which failure mode accounts for the reduced cross-section at bolt holes?", options: ["Gross yielding", "Net section fracture", "Local buckling", "Lateral-torsional buckling"], correctIndex: 1, explanation: "Net section fracture accounts for the reduced area at bolt holes, where stress concentrates." },
+    { id: "q29", topic: TOPICS[2], difficulty: "medium", question: "Which connection type is generally assumed to transfer moment as well as shear between members?", options: ["Simple shear connection", "Moment (rigid) connection", "Pinned connection", "Bearing-only connection"], correctIndex: 1, explanation: "Moment connections are designed to transfer both shear and rotational moment between connected members." },
+    { id: "q30", topic: TOPICS[2], difficulty: "hard", question: "A steel column's buckling capacity is most sensitive to which parameter, all else equal?", options: ["Yield strength alone", "Slenderness ratio", "Cross-section color", "Weld type"], correctIndex: 1, explanation: "Buckling capacity is governed largely by slenderness ratio, relating effective length to radius of gyration." },
+    { id: "q31", topic: TOPICS[2], difficulty: "easy", question: "Shear studs in composite steel-concrete beams primarily function to:", options: ["Transfer horizontal shear between the steel beam and concrete slab", "Resist wind load", "Reduce beam depth", "Prevent corrosion"], correctIndex: 0, explanation: "Shear studs transfer horizontal shear at the steel-concrete interface, allowing the two materials to act compositely." },
+    { id: "q32", topic: TOPICS[2], difficulty: "medium", question: "Increasing a steel beam's unbraced length, all else equal, generally has what effect on its flexural capacity?", options: ["No effect", "Decreases it due to increased buckling susceptibility", "Increases it", "Only affects shear capacity"], correctIndex: 1, explanation: "Longer unbraced lengths increase susceptibility to lateral-torsional buckling, reducing flexural capacity." },
+    { id: "q33", topic: TOPICS[3], difficulty: "easy", question: "Which soil property most directly governs consolidation settlement in clay?", options: ["Compressibility, governed by void ratio changes under load", "Soil color", "Grain shape alone", "Thermal conductivity"], correctIndex: 0, explanation: "Consolidation settlement in clay is driven by compressibility, reflected in void ratio change under sustained load." },
+    { id: "q34", topic: TOPICS[3], difficulty: "medium", question: "A mat (raft) foundation is typically chosen over multiple spread footings when:", options: ["Soil bearing capacity is low or footings would overlap", "Loads are very light", "Bedrock is at the surface", "Only for aesthetic reasons"], correctIndex: 0, explanation: "Mat foundations spread load over a large area, useful when low bearing capacity or footing overlap makes individual footings impractical." },
+    { id: "q35", topic: TOPICS[3], difficulty: "medium", question: "Which factor most directly reduces a pile's allowable skin friction capacity in soft clay?", options: ["Higher pile roughness", "Low undrained shear strength of the surrounding clay", "Larger pile diameter", "Deeper embedment alone"], correctIndex: 1, explanation: "Skin friction in clay is governed largely by the soil's undrained shear strength; softer clay provides less resistance." },
+    { id: "q36", topic: TOPICS[3], difficulty: "hard", question: "In a slope stability analysis, the factor of safety is generally defined as the ratio of:", options: ["Driving forces to resisting forces", "Resisting shear strength to driving forces", "Total stress to effective stress", "Void ratio to porosity"], correctIndex: 1, explanation: "Factor of safety compares available resisting shear strength to the driving forces causing instability." },
+    { id: "q37", topic: TOPICS[3], difficulty: "easy", question: "Rising groundwater within a soil mass generally has what effect on effective stress?", options: ["Increases effective stress", "Decreases effective stress", "No effect", "Effective stress becomes undefined"], correctIndex: 1, explanation: "Rising groundwater increases pore pressure, which reduces effective stress per Terzaghi's effective stress principle." },
+    { id: "q38", topic: TOPICS[3], difficulty: "medium", question: "Why is a geotechnical report typically required before finalizing a foundation design?", options: ["To characterize soil properties governing bearing capacity and settlement", "To determine exterior paint color", "It's only needed for high-rise buildings", "To calculate wind loads"], correctIndex: 0, explanation: "Geotechnical investigation characterizes subsurface conditions that directly govern foundation type, bearing capacity, and settlement." },
+    { id: "q39", topic: TOPICS[4], difficulty: "easy", question: "Which of the following best describes a building's seismic weight?", options: ["Only the roof weight", "The total weight contributing to seismic inertial forces", "Wind pressure on the facade", "The weight of structural steel only"], correctIndex: 1, explanation: "Seismic weight includes dead load plus applicable portions of other loads that contribute mass to seismic inertial forces." },
+    { id: "q40", topic: TOPICS[4], difficulty: "medium", question: "A soft-story condition in seismic design refers to:", options: ["A story with significantly less lateral stiffness than adjacent stories", "A story built with lightweight materials", "A basement level", "A story with reduced floor-to-floor height"], correctIndex: 0, explanation: "Soft stories concentrate seismic drift and damage due to a stiffness discontinuity between adjacent floors." },
+    { id: "q41", topic: TOPICS[4], difficulty: "medium", question: "Torsional irregularity in a building's lateral system typically arises from:", options: ["Symmetric mass and stiffness distribution", "An offset between the center of mass and center of rigidity", "Uniform column spacing", "Increased foundation depth"], correctIndex: 1, explanation: "Torsional irregularity results when the center of mass and center of rigidity don't coincide, inducing twist under lateral load." },
+    { id: "q42", topic: TOPICS[4], difficulty: "hard", question: "In wind load design, the design pressure on a building's windward face generally increases with:", options: ["Decreasing height above ground", "Increasing height above ground, up to a defined limit", "Building color", "Roof slope only"], correctIndex: 1, explanation: "Wind velocity pressure generally increases with height due to reduced ground-level turbulence, up to a code-defined limit." },
+    { id: "q43", topic: TOPICS[4], difficulty: "easy", question: "A diaphragm in a building's lateral system primarily functions to:", options: ["Transfer lateral forces from floors and roof to the vertical lateral system", "Support only gravity loads", "Resist only axial compression", "Provide fireproofing"], correctIndex: 0, explanation: "Diaphragms collect lateral forces at each floor/roof level and transfer them to the vertical lateral-resisting elements." },
+    { id: "q44", topic: TOPICS[4], difficulty: "medium", question: "Which best describes the role of a moment frame's beam-column connections in resisting lateral load?", options: ["They are designed to develop and transfer moment, providing lateral stiffness", "They are pinned and transfer no moment", "They only resist gravity loads", "They are purely decorative"], correctIndex: 0, explanation: "Moment frame connections are designed to transfer moment between beams and columns, which is what gives the frame lateral stiffness." },
     { id: "q5", topic: "Reinforced Concrete Design", difficulty: "medium", question: "Which factor most directly increases the development length required for reinforcing bars?", options: ["Larger bar diameter", "Higher concrete strength", "Epoxy coating removal", "Shorter bar spacing"], correctIndex: 0, explanation: "Development length scales with bar diameter — larger bars require more embedment to transfer force to the concrete." },
     { id: "q6", topic: "Foundations & Geotechnical", difficulty: "easy", question: "A deep foundation transfers load to bearing strata primarily through which two mechanisms?", options: ["Color and texture", "End bearing and skin friction", "Thermal expansion only", "Surface tension"], correctIndex: 1, explanation: "Piles and drilled shafts carry load via end bearing at the tip and skin friction along the shaft." },
   ],
@@ -55,6 +88,28 @@ const SEED_BANK = {
 };
 
 const DIFF_COLOR = { easy: GREEN, medium: AMBER, hard: RED };
+
+// Saves each visitor's progress in their own browser so it survives a page reload —
+// no account or database needed for this demo stage. Progress is local to that
+// browser/device only; it won't follow someone to a different computer.
+const STORAGE_KEY = "true-bearing-demo-state-v2";
+
+function loadSavedState() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveState(state) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    // Storage unavailable (e.g. private browsing) — fail silently, demo still works this session
+  }
+}
 
 function scoreColor(v) {
   if (v >= 75) return GREEN;
@@ -113,7 +168,7 @@ function DimensionBar({ label, value }) {
 
 function Sheet({ sheetNo, title, children }) {
   return (
-    <div className="relative border rounded-none p-6" style={{ borderColor: STEEL, borderWidth: 1, background: INK_2 }}>
+    <div className="relative border rounded-none p-6" style={{ borderColor: STEEL, borderWidth: 1, background: PAPER_2 }}>
       {["top-2 left-2 border-l border-t", "top-2 right-2 border-r border-t", "bottom-2 left-2 border-l border-b", "bottom-2 right-2 border-r border-b"].map((pos, i) => (
         <div key={i} className={`absolute ${pos} w-3 h-3`} style={{ borderColor: STEEL, opacity: 0.6 }} />
       ))}
@@ -129,19 +184,15 @@ function Sheet({ sheetNo, title, children }) {
   );
 }
 
-function callClaude(systemPrompt, userPrompt) {
-  return fetch("https://api.anthropic.com/v1/messages", {
+async function generateQuestions(topic) {
+  // Calls our own safe backend endpoint (api/generate-questions.js) instead of
+  // Anthropic directly — the real API key lives only on the server, never here.
+  const response = await fetch("/api/generate-questions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] }),
-  }).then((r) => r.json());
-}
-
-async function generateQuestions(topic) {
-  const system =
-    "You are an expert item-writer for the NCEES PE Civil: Structural exam. Generate original multiple-choice practice questions that test understanding of civil/structural engineering concepts at PE Civil: Structural exam style and difficulty. Write strictly from general engineering knowledge — do not reference, quote, closely paraphrase, or reconstruct content from any specific textbook, commercial test-prep product, or code document (e.g. ACI, ASCE, NCEES materials). Vary the numeric values, units, and scenario framing meaningfully across questions so each generation is distinct from prior ones. Respond ONLY with valid minified JSON and nothing else — no markdown fences, no commentary. Schema: {\"questions\":[{\"question\":string,\"options\":[string,string,string,string],\"correctIndex\":number,\"explanation\":string,\"difficulty\":\"easy\"|\"medium\"|\"hard\"}]}. Keep each explanation under 35 words.";
-  const user = `Generate 4 original practice questions for the topic "${topic}" at PE Civil: Structural exam difficulty, with a mix of difficulty levels.`;
-  const data = await callClaude(system, user);
+    body: JSON.stringify({ topic }),
+  });
+  const data = await response.json();
   const textBlock = (data.content || []).find((b) => b.type === "text");
   if (!textBlock) throw new Error("No response content");
   const cleaned = textBlock.text.replace(/```json|```/g, "").trim();
@@ -187,7 +238,7 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
                   return (
                     <button key={oi} disabled={submitted} onClick={() => onAnswer(i, oi)}
                       className="text-left px-3 py-2 text-sm flex items-center gap-2 rounded-none border transition"
-                      style={{ borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL, background: isSelected && !submitted ? "rgba(242,169,60,0.08)" : "transparent", color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      style={{ borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL, background: isSelected && !submitted ? "rgba(217,142,59,0.15)" : "transparent", color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
                       {showCorrect && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
                       {showWrongPick && <XCircle className="w-4 h-4 shrink-0" style={{ color: RED }} />}
                       <span>{opt}</span>
@@ -202,7 +253,7 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
       </div>
       {!submitted && (
         <button onClick={onSubmit} disabled={!allAnswered} className="mt-2 px-4 py-2 text-sm font-semibold rounded-none disabled:opacity-40"
-          style={{ background: LINE, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          style={{ background: INK, color: PAPER_2, fontFamily: "'IBM Plex Sans', sans-serif" }}>
           Submit answers
         </button>
       )}
@@ -353,7 +404,7 @@ function PracticeView({ bank, missed, you, onRequestGeneration, onCompleteQuiz }
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <select value={topic} onChange={(e) => { setTopic(e.target.value); setQuiz(null); setRequested(false); }} disabled={loading}
             className="px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            {TOPICS.map((t) => (<option key={t} value={t} style={{ background: INK }}>{t}</option>))}
+            {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
           </select>
           {hasEnough ? (
             <button onClick={startQuick} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
@@ -490,7 +541,7 @@ function DashboardView({ team, bank, missed }) {
               <CartesianGrid stroke={STEEL} strokeOpacity={0.2} vertical={false} />
               <XAxis dataKey="topic" tick={{ fill: STEEL, fontSize: 10 }} angle={-20} textAnchor="end" interval={0} />
               <YAxis domain={[0, 100]} tick={{ fill: STEEL, fontSize: 10 }} />
-              <Tooltip contentStyle={{ background: INK, border: `1px solid ${STEEL}`, fontFamily: "IBM Plex Sans" }} labelStyle={{ color: LINE }} />
+              <Tooltip contentStyle={{ background: PAPER_2, border: `1px solid ${STEEL}`, fontFamily: "IBM Plex Sans" }} labelStyle={{ color: INK }} />
               <Bar dataKey="value" radius={[2, 2, 0, 0]}>{topicAverages.map((d, i) => (<Cell key={i} fill={scoreColor(d.value)} />))}</Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -515,10 +566,24 @@ function DashboardView({ team, bank, missed }) {
 }
 
 export default function App() {
+  const saved = useMemo(() => loadSavedState(), []);
   const [view, setView] = useState("practice");
-  const [team, setTeam] = useState(SEED_TEAM);
-  const [bank, setBank] = useState(SEED_BANK);
-  const [missed, setMissed] = useState([]);
+  const [team, setTeam] = useState(saved?.team || SEED_TEAM);
+  const [bank, setBank] = useState(saved?.bank || SEED_BANK);
+  const [missed, setMissed] = useState(saved?.missed || []);
+
+  useEffect(() => {
+    saveState({ team, bank, missed });
+  }, [team, bank, missed]);
+
+  function resetDemo() {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+    setTeam(SEED_TEAM);
+    setBank(SEED_BANK);
+    setMissed([]);
+  }
 
   const you = team.find((e) => e.id === "you") || { topics: {} };
 
@@ -571,10 +636,10 @@ export default function App() {
   }
 
   return (
-    <div style={{ background: INK, minHeight: "100%", padding: "28px 20px" }}>
+    <div style={{ background: PAPER, minHeight: "100%", padding: "28px 20px" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-        select option { background: ${INK}; }
+        select option { background: ${PAPER}; }
       `}</style>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-end justify-between mb-1 flex-wrap gap-3">
@@ -594,7 +659,12 @@ export default function App() {
             ))}
           </div>
         </div>
-        <p className="text-xs mb-8" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Prototype demo — not a real product deployment. Storage is in-memory only and resets on reload.</p>
+        <p className="text-xs mb-8" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          Demo version. Your progress is saved in this browser and will still be here next time you visit — it isn't yet shared across devices or with other people.{" "}
+          <button onClick={resetDemo} className="underline" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            Reset my demo progress
+          </button>
+        </p>
         {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
         {view === "review" && <ReviewQueueView bank={bank} onApprove={approve} onReject={reject} />}
         {view === "dashboard" && <DashboardView team={team} bank={bank} missed={missed} />}
