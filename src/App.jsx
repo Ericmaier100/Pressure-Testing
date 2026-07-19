@@ -87,12 +87,28 @@ const SEED_BANK = {
   rejected: [],
 };
 
-const DIFF_COLOR = { easy: GREEN, medium: AMBER, hard: RED };
+// Difficulty is no longer author-assigned. It's computed from real answer data:
+// each question tracks attempts/correct across everyone who's answered it, and a
+// 1-10 difficulty score is derived from the actual miss rate. Used internally for
+// adaptive selection — never shown to users as a label.
+const MIN_ATTEMPTS_FOR_SCORE = 3;
+
+function getDifficultyScore(qId, stats) {
+  const s = stats[qId];
+  if (!s || s.attempts < MIN_ATTEMPTS_FOR_SCORE) return null; // not enough data yet
+  const missRate = 1 - s.correct / s.attempts;
+  return Math.max(1, Math.min(10, Math.round(missRate * 9) + 1));
+}
+
+function targetScoreForAccuracy(accuracy) {
+  // Low accuracy in a topic -> aim easier (low score). High accuracy -> aim harder (high score).
+  return Math.max(1, Math.min(10, Math.round(1 + (accuracy / 100) * 9)));
+}
 
 // Saves each visitor's progress in their own browser so it survives a page reload —
 // no account or database needed for this demo stage. Progress is local to that
 // browser/device only; it won't follow someone to a different computer.
-const STORAGE_KEY = "true-bearing-demo-state-v2";
+const STORAGE_KEY = "pressure-testing-demo-state-v1";
 
 function loadSavedState() {
   try {
@@ -117,36 +133,20 @@ function scoreColor(v) {
   return RED;
 }
 
-function weightsForAccuracy(acc) {
-  if (acc < 60) return { easy: 0.5, medium: 0.4, hard: 0.1 };
-  if (acc < 80) return { easy: 0.2, medium: 0.5, hard: 0.3 };
-  return { easy: 0.1, medium: 0.4, hard: 0.5 };
-}
-
-function pickAdaptiveSet(pool, accuracy, count, priorityQuestions = []) {
+function pickAdaptiveSet(pool, accuracy, count, priorityQuestions = [], stats = {}) {
   const priIds = new Set(priorityQuestions.map((q) => q.id));
   const remainingPool = pool.filter((q) => !priIds.has(q.id));
-  const weights = weightsForAccuracy(accuracy);
-  const byDiff = { easy: [], medium: [], hard: [] };
-  remainingPool.forEach((q) => byDiff[q.difficulty || "medium"].push(q));
-  Object.keys(byDiff).forEach((k) => byDiff[k].sort(() => Math.random() - 0.5));
+  const target = targetScoreForAccuracy(accuracy);
+
+  // Questions without enough answer data yet get a neutral score so they still
+  // surface sometimes — that's how they accumulate the data needed to be scored at all.
+  const scored = remainingPool
+    .map((q) => ({ q, score: getDifficultyScore(q.id, stats) ?? 5, hasData: getDifficultyScore(q.id, stats) !== null }))
+    .sort((a, b) => Math.abs(a.score - target) - Math.abs(b.score - target) || Math.random() - 0.5);
 
   const need = Math.max(0, count - priorityQuestions.length);
-  const targetCounts = {
-    easy: Math.round(weights.easy * need),
-    medium: Math.round(weights.medium * need),
-    hard: Math.round(weights.hard * need),
-  };
-
-  let picked = [];
-  ["easy", "medium", "hard"].forEach((d) => {
-    picked = picked.concat(byDiff[d].slice(0, targetCounts[d]));
-  });
-  if (picked.length < need) {
-    const leftover = remainingPool.filter((q) => !picked.some((p) => p.id === q.id)).sort(() => Math.random() - 0.5);
-    picked = picked.concat(leftover.slice(0, need - picked.length));
-  }
-  return [...priorityQuestions, ...picked.slice(0, need)];
+  const picked = scored.slice(0, need).map((s) => s.q);
+  return [...priorityQuestions, ...picked];
 }
 
 function DimensionBar({ label, value }) {
@@ -178,7 +178,7 @@ function Sheet({ sheetNo, title, children }) {
       </div>
       {children}
       <div className="mt-6 pt-3 flex justify-between text-[10px] uppercase tracking-[0.15em]" style={{ borderTop: `1px solid ${STEEL}`, color: STEEL, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.7 }}>
-        <span>Scale: NTS</span><span>True Bearing — Prototype</span><span>Rev D</span>
+        <span>Scale: NTS</span><span>Pressure Testing — Prototype</span><span>Rev D</span>
       </div>
     </div>
   );
@@ -197,22 +197,13 @@ async function generateQuestions(topic) {
   if (!textBlock) throw new Error("No response content");
   const cleaned = textBlock.text.replace(/```json|```/g, "").trim();
   const parsed = JSON.parse(cleaned);
-  return parsed.questions.map((q) => ({ ...q, id: nextId(), topic, difficulty: q.difficulty || "medium" }));
+  return parsed.questions.map((q) => ({ ...q, id: nextId(), topic }));
 }
 
 function formatTime(s) {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function DiffBadge({ d }) {
-  const c = DIFF_COLOR[d] || AMBER;
-  return (
-    <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 border" style={{ borderColor: c, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>
-      {d || "medium"}
-    </span>
-  );
 }
 
 function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered }) {
@@ -225,10 +216,9 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
             <div key={q.id} className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
-                <DiffBadge d={q.difficulty} />
               </div>
               <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                <span style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>Q{i + 1}. </span>{q.question}
+                <span style={{ fontWeight: 600 }}>Q{i + 1}. </span>{q.question}
               </div>
               <div className="grid gap-2">
                 {q.options.map((opt, oi) => {
@@ -261,7 +251,7 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
   );
 }
 
-function PracticeView({ bank, missed, you, onRequestGeneration, onCompleteQuiz }) {
+function PracticeView({ bank, missed, you, questionStats, onRequestGeneration, onCompleteQuiz }) {
   const [mode, setMode] = useState("adaptive");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [loading, setLoading] = useState(false);
@@ -320,7 +310,7 @@ function PracticeView({ bank, missed, you, onRequestGeneration, onCompleteQuiz }
     const acc = you.topics[target] ?? 50;
     const pool = bank.approved.filter((q) => q.topic === target);
     const missedForTopic = missed.filter((q) => q.topic === target).slice(0, 2);
-    const set = pickAdaptiveSet(pool, acc, 4, missedForTopic);
+    const set = pickAdaptiveSet(pool, acc, 4, missedForTopic, questionStats);
     setQuiz(set);
     setAnswers({});
     setSubmitted(false);
@@ -490,7 +480,6 @@ function ReviewQueueView({ bank, onApprove, onReject }) {
           <div key={q.id} className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[10px] uppercase tracking-widest" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
-              <DiffBadge d={q.difficulty} />
             </div>
             <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.question}</div>
             <div className="grid gap-1 mb-3">
@@ -571,10 +560,11 @@ export default function App() {
   const [team, setTeam] = useState(saved?.team || SEED_TEAM);
   const [bank, setBank] = useState(saved?.bank || SEED_BANK);
   const [missed, setMissed] = useState(saved?.missed || []);
+  const [questionStats, setQuestionStats] = useState(saved?.questionStats || {});
 
   useEffect(() => {
-    saveState({ team, bank, missed });
-  }, [team, bank, missed]);
+    saveState({ team, bank, missed, questionStats });
+  }, [team, bank, missed, questionStats]);
 
   function resetDemo() {
     try {
@@ -583,6 +573,7 @@ export default function App() {
     setTeam(SEED_TEAM);
     setBank(SEED_BANK);
     setMissed([]);
+    setQuestionStats({});
   }
 
   const you = team.find((e) => e.id === "you") || { topics: {} };
@@ -605,6 +596,14 @@ export default function App() {
     });
 
     if (results) {
+      setQuestionStats((prev) => {
+        const next = { ...prev };
+        results.forEach(({ q, correct: wasCorrect }) => {
+          const s = next[q.id] || { attempts: 0, correct: 0 };
+          next[q.id] = { attempts: s.attempts + 1, correct: s.correct + (wasCorrect ? 1 : 0) };
+        });
+        return next;
+      });
       setMissed((prev) => {
         let next = [...prev];
         results.forEach(({ q, correct: wasCorrect }) => {
@@ -645,7 +644,7 @@ export default function App() {
         <div className="flex items-end justify-between mb-1 flex-wrap gap-3">
           <div>
             <div className="text-[11px] tracking-[0.3em] uppercase" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
-            <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>TRUE BEARING</h1>
+            <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
           </div>
           <div className="flex gap-1 flex-wrap">
             {[["practice", "Practice"], ["review", "Review Queue"], ["dashboard", "Manager view"]].map(([key, label]) => (
@@ -665,7 +664,7 @@ export default function App() {
             Reset my demo progress
           </button>
         </p>
-        {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
+        {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} questionStats={questionStats} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
         {view === "review" && <ReviewQueueView bank={bank} onApprove={approve} onReject={reject} />}
         {view === "dashboard" && <DashboardView team={team} bank={bank} missed={missed} />}
       </div>

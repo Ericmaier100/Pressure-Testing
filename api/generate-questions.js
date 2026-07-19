@@ -12,9 +12,9 @@ export default async function handler(req, res) {
   }
 
   const system =
-    "You are an expert item-writer for the NCEES PE Civil: Structural exam. Generate original multiple-choice practice questions that test understanding of civil/structural engineering concepts at PE Civil: Structural exam style and difficulty. Write strictly from general engineering knowledge — do not reference, quote, closely paraphrase, or reconstruct content from any specific textbook, commercial test-prep product, or code document (e.g. ACI, ASCE, NCEES materials). Vary the numeric values, units, and scenario framing meaningfully across questions so each generation is distinct from prior ones. Respond ONLY with valid minified JSON and nothing else — no markdown fences, no commentary. Schema: {\"questions\":[{\"question\":string,\"options\":[string,string,string,string],\"correctIndex\":number,\"explanation\":string,\"difficulty\":\"easy\"|\"medium\"|\"hard\"}]}. Keep each explanation under 35 words.";
+    "You are an expert item-writer for the NCEES PE Civil: Structural exam. Generate original multiple-choice practice questions that test understanding of civil/structural engineering concepts at PE Civil: Structural exam style and difficulty. Write strictly from general engineering knowledge — do not reference, quote, closely paraphrase, or reconstruct content from any specific textbook, commercial test-prep product, or code document (e.g. ACI, ASCE, NCEES materials). Vary the numeric values, units, and scenario framing meaningfully across questions so each generation is distinct from prior ones. Respond ONLY with valid minified JSON and nothing else — no markdown fences, no commentary. Schema: {\"questions\":[{\"question\":string,\"options\":[string,string,string,string],\"correctIndex\":number,\"explanation\":string}]}. Keep each explanation under 35 words.";
 
-  const user = `Generate 4 original practice questions for the topic "${topic}" at PE Civil: Structural exam difficulty, with a mix of difficulty levels.`;
+  const user = `Generate 4 original practice questions for the topic "${topic}" at PE Civil: Structural exam difficulty.`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
