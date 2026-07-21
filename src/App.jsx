@@ -11,14 +11,15 @@ const TOPICS = [
 ];
 
 // Warm "drafting vellum" palette — cream/tan paper tones instead of dark blueprint
-const PAPER = "#EDE3C8";    // page background
-const PAPER_2 = "#F8F1DE";  // sheet/panel background, lighter cream
-const INK = "#332B1D";      // primary text — dark ink brown
+const PAPER = "#F3F6F7";    // page background — soft, muted blue-gray, not bright white
+const PAPER_2 = "#FAFCFC";  // sheet/panel/card background — gentle off-white
+const INK = "#3A4750";      // primary text and outlines — softened slate, not near-black
 const LINE = INK;           // kept as an alias so no text ends up unreadable
-const STEEL = "#93805C";    // secondary text, borders — warm taupe
-const AMBER = "#D98E3B";    // accent — warm amber/rust
-const RED = "#B5482F";      // incorrect / weak — terracotta
-const GREEN = "#5C7A52";    // correct / strong — sage green
+const STEEL = "#8398A6";    // secondary text — soft muted blue-gray
+const AMBER = "#C79552";    // accent — muted, desaturated amber
+const RED = "#B5514A";      // incorrect / weak — softened terracotta
+const GREEN = "#4F8058";    // correct / strong — muted sage green
+const GRID_LINE = "#E9EEF0"; // barely-there calc-pad grid lines
 
 let idCounter = 300;
 function nextId() {
@@ -168,7 +169,7 @@ function DimensionBar({ label, value }) {
 
 function Sheet({ sheetNo, title, children }) {
   return (
-    <div className="relative border rounded-none p-6" style={{ borderColor: STEEL, borderWidth: 1, background: PAPER_2 }}>
+    <div className="relative border rounded-none p-6" style={{ borderColor: INK, borderWidth: 1, background: PAPER_2 }}>
       {["top-2 left-2 border-l border-t", "top-2 right-2 border-r border-t", "bottom-2 left-2 border-l border-b", "bottom-2 right-2 border-r border-b"].map((pos, i) => (
         <div key={i} className={`absolute ${pos} w-3 h-3`} style={{ borderColor: STEEL, opacity: 0.6 }} />
       ))}
@@ -228,7 +229,7 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
                   return (
                     <button key={oi} disabled={submitted} onClick={() => onAnswer(i, oi)}
                       className="text-left px-3 py-2 text-sm flex items-center gap-2 rounded-none border transition"
-                      style={{ borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL, background: isSelected && !submitted ? "rgba(217,142,59,0.15)" : "transparent", color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      style={{ borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL, background: isSelected && !submitted ? "rgba(199,149,82,0.15)" : "transparent", color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
                       {showCorrect && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
                       {showWrongPick && <XCircle className="w-4 h-4 shrink-0" style={{ color: RED }} />}
                       <span>{opt}</span>
@@ -635,21 +636,25 @@ export default function App() {
   }
 
   return (
-    <div style={{ background: PAPER, minHeight: "100%", padding: "28px 20px" }}>
+    <div style={{
+      background: `repeating-linear-gradient(0deg, transparent, transparent 23px, ${GRID_LINE} 23px, ${GRID_LINE} 24px), repeating-linear-gradient(90deg, transparent, transparent 23px, ${GRID_LINE} 23px, ${GRID_LINE} 24px), ${PAPER}`,
+      backgroundPosition: "20px 28px",
+      minHeight: "100%", padding: "28px 20px"
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         select option { background: ${PAPER}; }
       `}</style>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-end justify-between mb-1 flex-wrap gap-3">
-          <div>
-            <div className="text-[11px] tracking-[0.3em] uppercase" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
+          <div className="border px-4 py-2" style={{ borderColor: INK, background: PAPER_2 }}>
             <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
+            <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
           <div className="flex gap-1 flex-wrap">
             {[["practice", "Practice"], ["review", "Review Queue"], ["dashboard", "Manager view"]].map(([key, label]) => (
               <button key={key} onClick={() => setView(key)} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5"
-                style={{ borderColor: view === key ? AMBER : STEEL, color: view === key ? AMBER : STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
+                style={{ borderColor: INK, background: PAPER_2, color: view === key ? AMBER : INK, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {key === "review" && bank.pending.length > 0 && (
                   <span className="inline-flex items-center justify-center rounded-full text-[9px] w-4 h-4" style={{ background: AMBER, color: INK }}>{bank.pending.length}</span>
                 )}
