@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from "recharts";
 import { Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Users, ClipboardList, Inbox, Timer, RotateCcw, Target } from "lucide-react";
+import { supabase } from "./supabaseClient";
 
 const TOPICS = [
   "Structural Analysis (Loads & Load Effects)",
@@ -466,10 +467,15 @@ function PracticeView({ bank, missed, you, questionStats, onRequestGeneration, o
   );
 }
 
-function ReviewQueueView({ bank, onApprove, onReject }) {
+function ReviewQueueView({ bank, isAdmin, onApprove, onReject }) {
   const [notes, setNotes] = useState({});
   return (
     <Sheet sheetNo="2 of 4" title="Review Queue — Admin Approval">
+      {!isAdmin && (
+        <p className="text-xs mb-4" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          You can see what's pending, but only an admin account can approve or reject questions.
+        </p>
+      )}
       <div className="flex flex-wrap gap-8 mb-6">
         <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Pending</div><div className="text-2xl font-semibold" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.pending.length}</div></div>
         <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Approved bank</div><div className="text-2xl font-semibold" style={{ color: GREEN, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.approved.length}</div></div>
@@ -491,12 +497,16 @@ function ReviewQueueView({ bank, onApprove, onReject }) {
               ))}
             </div>
             <div className="text-xs mb-3" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.explanation}</div>
-            <textarea placeholder="Reason for rejection (optional)" value={notes[q.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [q.id]: e.target.value }))}
-              className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
-            <div className="flex gap-2">
-              <button onClick={() => onApprove(q.id)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: GREEN, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
-              <button onClick={() => onReject(q.id, notes[q.id] || "")} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: RED, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}><XCircle className="w-3.5 h-3.5" /> Reject</button>
-            </div>
+            {isAdmin && (
+              <>
+                <textarea placeholder="Reason for rejection (optional)" value={notes[q.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [q.id]: e.target.value }))}
+                  className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+                <div className="flex gap-2">
+                  <button onClick={() => onApprove(q.id)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: GREEN, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
+                  <button onClick={() => onReject(q.id, notes[q.id] || "")} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: RED, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}><XCircle className="w-3.5 h-3.5" /> Reject</button>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -555,24 +565,145 @@ function DashboardView({ team, bank, missed }) {
   );
 }
 
+function AuthScreen({ onAuthed }) {
+  const [mode, setMode] = useState("signin"); // 'signin' or 'signup'
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [confirmMsg, setConfirmMsg] = useState(null);
+
+  async function submit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setConfirmMsg(null);
+    if (mode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else onAuthed();
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) setError(error.message);
+      else setConfirmMsg("Check your email to confirm your account, then sign in.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ background: PAPER, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');`}</style>
+      <div className="border w-full max-w-sm p-6" style={{ borderColor: INK, background: PAPER_2 }}>
+        <div className="mb-6">
+          <h1 className="text-2xl" style={{ color: INK, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
+          <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
+            {mode === "signin" ? "Sign in" : "Create an account"}
+          </div>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          <input type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+          <input type="password" required placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+          {error && <div className="text-xs" style={{ color: RED }}>{error}</div>}
+          {confirmMsg && <div className="text-xs" style={{ color: GREEN }}>{confirmMsg}</div>}
+          <button type="submit" disabled={loading} className="w-full py-2 text-sm font-semibold rounded-none disabled:opacity-60"
+            style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Sign up"}
+          </button>
+        </form>
+        <button onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); setConfirmMsg(null); }}
+          className="mt-4 text-xs underline" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const saved = useMemo(() => loadSavedState(), []);
+  const [session, setSession] = useState(undefined); // undefined = checking, null = signed out, object = signed in
+  const [profile, setProfile] = useState(null);
   const [view, setView] = useState("practice");
   const [team, setTeam] = useState(saved?.team || SEED_TEAM);
-  const [bank, setBank] = useState(saved?.bank || SEED_BANK);
+  const [bank, setBank] = useState({ approved: [], pending: [], rejected: [] });
   const [missed, setMissed] = useState(saved?.missed || []);
   const [questionStats, setQuestionStats] = useState(saved?.questionStats || {});
+  const [bankLoading, setBankLoading] = useState(true);
+  const [bankError, setBankError] = useState(null);
+
+  // Check for an existing session on load, and keep listening for sign-in/out.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // Once signed in, load this user's role (admin or member).
+  useEffect(() => {
+    if (!session) {
+      setProfile(null);
+      return;
+    }
+    supabase.from("profiles").select("role, email").eq("id", session.user.id).single().then(({ data }) => {
+      setProfile(data || { role: "member" });
+    });
+  }, [session]);
+
+  // Load the real, permanent question bank from Supabase — but only once signed in,
+  // since the table now requires authentication to read.
+  useEffect(() => {
+    if (!session) return;
+    async function loadBank() {
+      setBankLoading(true);
+      setBankError(null);
+      const { data, error } = await supabase.from("questions").select("*").order("created_at", { ascending: true });
+      if (error) {
+        setBankError("Couldn't load the question bank. Check your Supabase connection.");
+        setBankLoading(false);
+        return;
+      }
+      const shaped = data.map((r) => ({
+        id: r.id,
+        topic: r.topic,
+        question: r.question,
+        options: r.options,
+        correctIndex: r.correct_index,
+        explanation: r.explanation,
+        note: r.reject_note || undefined,
+      }));
+      setBank({
+        approved: shaped.filter((_, i) => data[i].status === "approved"),
+        pending: shaped.filter((_, i) => data[i].status === "pending"),
+        rejected: shaped.filter((_, i) => data[i].status === "rejected"),
+      });
+      // Seed local difficulty stats from the server's real attempt counts on load.
+      setQuestionStats((prev) => {
+        const next = { ...prev };
+        data.forEach((r) => {
+          if (r.attempts > 0 && !next[r.id]) {
+            next[r.id] = { attempts: r.attempts, correct: r.correct_count };
+          }
+        });
+        return next;
+      });
+      setBankLoading(false);
+    }
+    loadBank();
+  }, [session]);
 
   useEffect(() => {
-    saveState({ team, bank, missed, questionStats });
-  }, [team, bank, missed, questionStats]);
+    saveState({ team, missed, questionStats });
+  }, [team, missed, questionStats]);
 
   function resetDemo() {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch (e) {}
     setTeam(SEED_TEAM);
-    setBank(SEED_BANK);
     setMissed([]);
     setQuestionStats({});
   }
@@ -614,25 +745,73 @@ export default function App() {
         });
         return next;
       });
+      // Push the real answer counts to Supabase so difficulty scoring accumulates
+      // across everyone who uses the app, not just this browser.
+      results.forEach(({ q, correct: wasCorrect }) => {
+        supabase.rpc("increment_question_stat", { q_id: q.id, was_correct: wasCorrect }).then(({ error }) => {
+          if (error) console.error("Stat update failed:", error.message);
+        });
+      });
     }
   }
 
-  function addPending(questions) {
-    setBank((b) => ({ ...b, pending: [...b.pending, ...questions] }));
+  async function addPending(questions) {
+    const rows = questions.map((q) => ({
+      topic: q.topic,
+      question: q.question,
+      options: q.options,
+      correct_index: q.correctIndex,
+      explanation: q.explanation,
+      status: "pending",
+    }));
+    const { data, error } = await supabase.from("questions").insert(rows).select();
+    if (error) {
+      setBankError("Couldn't save new questions to the bank. Try again.");
+      return;
+    }
+    const shaped = data.map((r) => ({
+      id: r.id, topic: r.topic, question: r.question, options: r.options,
+      correctIndex: r.correct_index, explanation: r.explanation,
+    }));
+    setBank((b) => ({ ...b, pending: [...b.pending, ...shaped] }));
   }
-  function approve(id) {
+
+  async function approve(id) {
+    const { error } = await supabase.from("questions").update({ status: "approved" }).eq("id", id);
+    if (error) {
+      setBankError("Couldn't save that approval. Try again.");
+      return;
+    }
     setBank((b) => {
       const q = b.pending.find((x) => x.id === id);
       if (!q) return b;
       return { ...b, pending: b.pending.filter((x) => x.id !== id), approved: [...b.approved, q] };
     });
   }
-  function reject(id, note) {
+
+  async function reject(id, note) {
+    const { error } = await supabase.from("questions").update({ status: "rejected", reject_note: note || null }).eq("id", id);
+    if (error) {
+      setBankError("Couldn't save that rejection. Try again.");
+      return;
+    }
     setBank((b) => {
       const q = b.pending.find((x) => x.id === id);
       if (!q) return b;
       return { ...b, pending: b.pending.filter((x) => x.id !== id), rejected: [...b.rejected, { ...q, note }] };
     });
+  }
+
+  if (session === undefined) {
+    return (
+      <div style={{ background: PAPER, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 className="w-5 h-5 animate-spin" style={{ color: STEEL }} />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen onAuthed={() => {}} />;
   }
 
   return (
@@ -651,7 +830,7 @@ export default function App() {
             <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
             <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap items-center">
             {[["practice", "Practice"], ["review", "Review Queue"], ["dashboard", "Manager view"]].map(([key, label]) => (
               <button key={key} onClick={() => setView(key)} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5"
                 style={{ borderColor: INK, background: PAPER_2, color: view === key ? AMBER : INK, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -661,17 +840,37 @@ export default function App() {
                 {label}
               </button>
             ))}
+            <span className="text-[10px] ml-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
+              {session.user.email} {profile?.role === "admin" && "· admin"}
+            </span>
+            <button onClick={() => supabase.auth.signOut()} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
+              style={{ borderColor: INK, background: PAPER_2, color: INK, fontFamily: "'IBM Plex Mono', monospace" }}>
+              Sign out
+            </button>
           </div>
         </div>
         <p className="text-xs mb-8" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-          Demo version. Your progress is saved in this browser and will still be here next time you visit — it isn't yet shared across devices or with other people.{" "}
+          Demo version. The question bank is shared and permanent. Your personal quiz progress is saved in this browser and isn't yet shared across devices or with other people.{" "}
           <button onClick={resetDemo} className="underline" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif" }}>
             Reset my demo progress
           </button>
         </p>
-        {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} questionStats={questionStats} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
-        {view === "review" && <ReviewQueueView bank={bank} onApprove={approve} onReject={reject} />}
-        {view === "dashboard" && <DashboardView team={team} bank={bank} missed={missed} />}
+        {bankError && (
+          <div className="mb-4 text-sm flex items-center gap-2" style={{ color: RED }}>
+            <AlertTriangle className="w-4 h-4" /> {bankError}
+          </div>
+        )}
+        {bankLoading ? (
+          <div className="text-sm flex items-center gap-2" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading question bank…
+          </div>
+        ) : (
+          <>
+            {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} questionStats={questionStats} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
+            {view === "review" && <ReviewQueueView bank={bank} isAdmin={profile?.role === "admin"} onApprove={approve} onReject={reject} />}
+            {view === "dashboard" && <DashboardView team={team} bank={bank} missed={missed} />}
+          </>
+        )}
       </div>
     </div>
   );
