@@ -230,9 +230,14 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
                   return (
                     <button key={oi} disabled={submitted} onClick={() => onAnswer(i, oi)}
                       className="text-left px-3 py-2 text-sm flex items-center gap-2 rounded-none border transition"
-                      style={{ borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL, background: isSelected && !submitted ? "rgba(199,149,82,0.15)" : "transparent", color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                      {showCorrect && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
-                      {showWrongPick && <XCircle className="w-4 h-4 shrink-0" style={{ color: RED }} />}
+                      style={{
+                        borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL,
+                        background: showCorrect ? GREEN : showWrongPick ? RED : isSelected && !submitted ? "rgba(199,149,82,0.15)" : "transparent",
+                        color: showCorrect || showWrongPick ? PAPER_2 : LINE,
+                        fontFamily: "'IBM Plex Sans', sans-serif",
+                      }}>
+                      {showCorrect && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: PAPER_2 }} />}
+                      {showWrongPick && <XCircle className="w-4 h-4 shrink-0" style={{ color: PAPER_2 }} />}
                       <span>{opt}</span>
                     </button>
                   );
@@ -467,8 +472,103 @@ function PracticeView({ bank, missed, you, questionStats, onRequestGeneration, o
   );
 }
 
-function ReviewQueueView({ bank, isAdmin, onApprove, onReject }) {
-  const [notes, setNotes] = useState({});
+function EditableQuestionCard({ q, onApprove, onReject, onDelete, onSaveEdit }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    setDraft({ question: q.question, options: [...q.options], correctIndex: q.correctIndex, explanation: q.explanation });
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    const ok = await onSaveEdit(q.id, draft);
+    setSaving(false);
+    if (ok) setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
+        <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic} · editing</div>
+        <textarea value={draft.question} onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
+          className="w-full mb-3 px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+        <div className="grid gap-2 mb-3">
+          {draft.options.map((opt, oi) => (
+            <div key={oi} className="flex items-center gap-2">
+              <input type="radio" checked={draft.correctIndex === oi} onChange={() => setDraft((d) => ({ ...d, correctIndex: oi }))} />
+              <input value={opt} onChange={(e) => setDraft((d) => ({ ...d, options: d.options.map((o, i) => (i === oi ? e.target.value : o)) }))}
+                className="flex-1 px-3 py-1.5 text-sm bg-transparent border rounded-none" style={{ borderColor: oi === draft.correctIndex ? GREEN : STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+            </div>
+          ))}
+        </div>
+        <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Explanation</div>
+        <textarea value={draft.explanation} onChange={(e) => setDraft((d) => ({ ...d, explanation: e.target.value }))}
+          className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+          <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-widest" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
+      </div>
+      <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.question}</div>
+      <div className="grid gap-1 mb-3">
+        {q.options.map((opt, oi) => (
+          <div key={oi} className="text-sm px-3 py-1.5 flex items-center gap-2 border" style={{ borderColor: oi === q.correctIndex ? GREEN : STEEL, color: LINE, opacity: oi === q.correctIndex ? 1 : 0.75, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            {oi === q.correctIndex && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}{opt}
+          </div>
+        ))}
+      </div>
+      <div className="text-xs mb-3" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.explanation}</div>
+      <textarea placeholder="Reason for rejection (optional)" value={note} onChange={(e) => setNote(e.target.value)}
+        className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => onApprove(q.id)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: GREEN, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
+        <button onClick={() => onReject(q.id, note)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: RED, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}><XCircle className="w-3.5 h-3.5" /> Reject</button>
+        <button onClick={startEdit} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Edit</button>
+        <button onClick={() => onDelete(q.id)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function BankList({ title, items, color, onDelete }) {
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-6">
+      <button onClick={() => setOpen(!open)} className="text-[11px] uppercase tracking-widest mb-2" style={{ color, fontFamily: "'IBM Plex Mono', monospace", background: "none", border: "none", cursor: "pointer" }}>
+        {open ? "▾" : "▸"} {title} ({items.length})
+      </button>
+      {open && (
+        <div className="space-y-2">
+          {items.map((q) => (
+            <div key={q.id} className="flex items-start justify-between gap-3 text-xs py-2" style={{ borderBottom: `1px solid ${STEEL}`, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              <span>{q.question}</span>
+              <button onClick={() => onDelete(q.id)} className="shrink-0 px-2 py-1 border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveEdit, onExport }) {
   return (
     <Sheet sheetNo="2 of 4" title="Review Queue — Admin Approval">
       {!isAdmin && (
@@ -476,40 +576,37 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject }) {
           You can see what's pending, but only an admin account can approve or reject questions.
         </p>
       )}
-      <div className="flex flex-wrap gap-8 mb-6">
-        <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Pending</div><div className="text-2xl font-semibold" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.pending.length}</div></div>
-        <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Approved bank</div><div className="text-2xl font-semibold" style={{ color: GREEN, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.approved.length}</div></div>
-        <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Rejected</div><div className="text-2xl font-semibold" style={{ color: RED, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.rejected.length}</div></div>
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div className="flex flex-wrap gap-8">
+          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Pending</div><div className="text-2xl font-semibold" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.pending.length}</div></div>
+          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Approved bank</div><div className="text-2xl font-semibold" style={{ color: GREEN, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.approved.length}</div></div>
+          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Rejected</div><div className="text-2xl font-semibold" style={{ color: RED, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.rejected.length}</div></div>
+        </div>
+        {isAdmin && (
+          <button onClick={onExport} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: INK, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            Export full bank (.json)
+          </button>
+        )}
       </div>
       {bank.pending.length === 0 && <p className="text-sm" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Nothing waiting for review.</p>}
       <div className="space-y-6">
-        {bank.pending.map((q) => (
-          <div key={q.id} className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] uppercase tracking-widest" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
+        {bank.pending.map((q) =>
+          isAdmin ? (
+            <EditableQuestionCard key={q.id} q={q} onApprove={onApprove} onReject={onReject} onDelete={onDelete} onSaveEdit={onSaveEdit} />
+          ) : (
+            <div key={q.id} className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
+              <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</div>
+              <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.question}</div>
             </div>
-            <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.question}</div>
-            <div className="grid gap-1 mb-3">
-              {q.options.map((opt, oi) => (
-                <div key={oi} className="text-sm px-3 py-1.5 flex items-center gap-2 border" style={{ borderColor: oi === q.correctIndex ? GREEN : STEEL, color: LINE, opacity: oi === q.correctIndex ? 1 : 0.75, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                  {oi === q.correctIndex && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}{opt}
-                </div>
-              ))}
-            </div>
-            <div className="text-xs mb-3" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.explanation}</div>
-            {isAdmin && (
-              <>
-                <textarea placeholder="Reason for rejection (optional)" value={notes[q.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [q.id]: e.target.value }))}
-                  className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
-                <div className="flex gap-2">
-                  <button onClick={() => onApprove(q.id)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: GREEN, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
-                  <button onClick={() => onReject(q.id, notes[q.id] || "")} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: RED, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}><XCircle className="w-3.5 h-3.5" /> Reject</button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
+          )
+        )}
       </div>
+      {isAdmin && (
+        <>
+          <BankList title="Manage approved questions" items={bank.approved} color={GREEN} onDelete={onDelete} />
+          <BankList title="Manage rejected questions" items={bank.rejected} color={RED} onDelete={onDelete} />
+        </>
+      )}
     </Sheet>
   );
 }
@@ -802,6 +899,49 @@ export default function App() {
     });
   }
 
+  async function deleteQuestion(id) {
+    const { error } = await supabase.from("questions").delete().eq("id", id);
+    if (error) {
+      setBankError("Couldn't delete that question. Try again.");
+      return;
+    }
+    setBank((b) => ({
+      approved: b.approved.filter((x) => x.id !== id),
+      pending: b.pending.filter((x) => x.id !== id),
+      rejected: b.rejected.filter((x) => x.id !== id),
+    }));
+  }
+
+  async function saveEdit(id, edits) {
+    const { error } = await supabase
+      .from("questions")
+      .update({ question: edits.question, options: edits.options, correct_index: edits.correctIndex, explanation: edits.explanation })
+      .eq("id", id);
+    if (error) {
+      setBankError("Couldn't save your edits. Try again.");
+      return false;
+    }
+    setBank((b) => ({ ...b, pending: b.pending.map((q) => (q.id === id ? { ...q, ...edits } : q)) }));
+    return true;
+  }
+
+  async function exportBank() {
+    const { data, error } = await supabase.from("questions").select("*").order("created_at", { ascending: true });
+    if (error) {
+      setBankError("Couldn't export the bank. Try again.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pressure-testing-question-bank-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   if (session === undefined) {
     return (
       <div style={{ background: PAPER, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -831,7 +971,7 @@ export default function App() {
             <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
           <div className="flex gap-1 flex-wrap items-center">
-            {[["practice", "Practice"], ["review", "Review Queue"], ["dashboard", "Manager view"]].map(([key, label]) => (
+            {[["practice", "Practice"], ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []), ["dashboard", "Manager view"]].map(([key, label]) => (
               <button key={key} onClick={() => setView(key)} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5"
                 style={{ borderColor: INK, background: PAPER_2, color: view === key ? AMBER : INK, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {key === "review" && bank.pending.length > 0 && (
@@ -867,7 +1007,7 @@ export default function App() {
         ) : (
           <>
             {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} questionStats={questionStats} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
-            {view === "review" && <ReviewQueueView bank={bank} isAdmin={profile?.role === "admin"} onApprove={approve} onReject={reject} />}
+            {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} />}
             {view === "dashboard" && <DashboardView team={team} bank={bank} missed={missed} />}
           </>
         )}
