@@ -186,13 +186,18 @@ function Sheet({ sheetNo, title, children }) {
   );
 }
 
-async function generateQuestions(topic) {
+async function generateQuestions(topic, referenceQuestions = []) {
   // Calls our own safe backend endpoint (api/generate-questions.js) instead of
   // Anthropic directly — the real API key lives only on the server, never here.
+  // referenceQuestions: a few of THIS PRODUCT'S OWN already-approved questions on
+  // this topic, sent along as grounding so new questions match their accuracy/style.
+  const examples = referenceQuestions.slice(0, 3).map((q) => ({
+    question: q.question, options: q.options, correctIndex: q.correctIndex, explanation: q.explanation,
+  }));
   const response = await fetch("/api/generate-questions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic }),
+    body: JSON.stringify({ topic, examples }),
   });
   const data = await response.json();
   const textBlock = (data.content || []).find((b) => b.type === "text");
@@ -258,8 +263,8 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
   );
 }
 
-function PracticeView({ bank, missed, you, questionStats, onRequestGeneration, onCompleteQuiz }) {
-  const [mode, setMode] = useState("adaptive");
+function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGeneration, onCompleteQuiz }) {
+  const [mode, setMode] = useState(isAdmin ? "adaptive" : "quick");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -338,7 +343,7 @@ function PracticeView({ bank, missed, you, questionStats, onRequestGeneration, o
     setLoading(true);
     setError(null);
     try {
-      const qs = await generateQuestions(topic);
+      const qs = await generateQuestions(topic, approvedForTopic);
       onRequestGeneration(qs);
       setRequested(true);
     } catch (e) {
@@ -372,7 +377,7 @@ function PracticeView({ bank, missed, you, questionStats, onRequestGeneration, o
   return (
     <Sheet sheetNo="1 of 4" title="Practice">
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        {[["adaptive", "Adaptive"], ["quick", "Quick set"], ["timed", "Timed mock exam"]].map(([key, label]) => (
+        {[...(isAdmin ? [["adaptive", "Adaptive"]] : []), ["quick", "Quick set"], ["timed", "Timed mock exam"]].map(([key, label]) => (
           <button key={key} onClick={() => { setMode(key); setQuiz(null); setRequested(false); }}
             className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
             style={{ borderColor: mode === key ? AMBER : STEEL, color: mode === key ? AMBER : STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -624,6 +629,9 @@ function DashboardView({ team, bank, missed }) {
 
   return (
     <div className="space-y-6">
+      <div className="text-xs px-3 py-2 border" style={{ borderColor: AMBER, color: AMBER, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        Sample data for demo purposes — the team roster below (R. Alvarez, M. Okafor, etc.) is illustrative, not real employees. Your own real practice results still show up here alongside it.
+      </div>
       <Sheet sheetNo="3 of 4" title="Manager Dashboard — Team Readiness">
         <div className="flex flex-wrap gap-8 mb-6">
           <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Team avg. readiness</div><div className="text-3xl font-semibold" style={{ color: scoreColor(teamAvgReadiness), fontFamily: "'IBM Plex Mono', monospace" }}>{teamAvgReadiness}%</div></div>
@@ -719,16 +727,16 @@ function AuthScreen({ onAuthed }) {
 }
 
 export default function App() {
-  const saved = useMemo(() => loadSavedState(), []);
   const [session, setSession] = useState(undefined); // undefined = checking, null = signed out, object = signed in
   const [profile, setProfile] = useState(null);
   const [view, setView] = useState("practice");
-  const [team, setTeam] = useState(saved?.team || SEED_TEAM);
+  const [team, setTeam] = useState(SEED_TEAM);
   const [bank, setBank] = useState({ approved: [], pending: [], rejected: [] });
-  const [missed, setMissed] = useState(saved?.missed || []);
-  const [questionStats, setQuestionStats] = useState(saved?.questionStats || {});
+  const [missed, setMissed] = useState([]);
+  const [questionStats, setQuestionStats] = useState({});
   const [bankLoading, setBankLoading] = useState(true);
   const [bankError, setBankError] = useState(null);
+  const [progressLoaded, setProgressLoaded] = useState(false);
 
   // Check for an existing session on load, and keep listening for sign-in/out.
   useEffect(() => {
@@ -745,10 +753,19 @@ export default function App() {
       setProfile(null);
       return;
     }
-    supabase.from("profiles").select("role, email").eq("id", session.user.id).single().then(({ data }) => {
+    supabase.from("profiles").select("role, email").eq("id", session.user.id).maybeSingle().then(({ data, error }) => {
+      if (error) console.error("Profile lookup failed:", error.message);
       setProfile(data || { role: "member" });
     });
   }, [session]);
+
+  // If someone's role doesn't permit the tab they're currently on (e.g. it changed,
+  // or they landed on a hidden tab some other way), bounce back to Practice.
+  useEffect(() => {
+    if (!profile) return;
+    if (view === "review" && profile.role !== "admin") setView("practice");
+    if (view === "dashboard" && profile.role !== "admin" && profile.role !== "manager") setView("practice");
+  }, [profile, view]);
 
   // Load the real, permanent question bank from Supabase — but only once signed in,
   // since the table now requires authentication to read.
@@ -792,14 +809,45 @@ export default function App() {
     loadBank();
   }, [session]);
 
+  // Once both the bank and the session are ready, load THIS account's saved
+  // progress from Supabase — not the browser. This is what makes progress
+  // follow the person's login instead of the device they happen to be on.
   useEffect(() => {
-    saveState({ team, missed, questionStats });
-  }, [team, missed, questionStats]);
+    if (!session || bankLoading) return;
+    async function loadProgress() {
+      const { data, error } = await supabase.from("user_progress").select("*").eq("user_id", session.user.id).maybeSingle();
+      if (error || !data) {
+        setProgressLoaded(true);
+        return;
+      }
+      setTeam((prev) => {
+        const others = prev.filter((e) => e.id !== "you");
+        const youObj = { id: "you", name: "You", role: "EIT, Structural", readiness: data.readiness || 0, topics: data.topic_scores || {} };
+        return [...others, youObj];
+      });
+      const allQuestions = [...bank.approved, ...bank.pending, ...bank.rejected];
+      const missedQs = (data.missed_ids || []).map((id) => allQuestions.find((q) => q.id === id)).filter(Boolean);
+      setMissed(missedQs);
+      setProgressLoaded(true);
+    }
+    loadProgress();
+  }, [session, bankLoading]);
 
-  function resetDemo() {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {}
+  async function saveProgressToServer(youObj, missedList) {
+    if (!session) return;
+    await supabase.from("user_progress").upsert({
+      user_id: session.user.id,
+      topic_scores: youObj.topics,
+      readiness: youObj.readiness,
+      missed_ids: missedList.map((q) => q.id),
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  async function resetDemo() {
+    if (session) {
+      await supabase.from("user_progress").delete().eq("user_id", session.user.id);
+    }
     setTeam(SEED_TEAM);
     setMissed([]);
     setQuestionStats({});
@@ -809,11 +857,12 @@ export default function App() {
 
   function recordResult(topicLabel, correct, total, results) {
     const pct = Math.round((correct / total) * 100);
+    let updatedYou;
     setTeam((prev) => {
       const meIdx = prev.findIndex((e) => e.id === "you");
       if (meIdx === -1) {
-        const youObj = { id: "you", name: "You", role: "EIT, Structural", readiness: pct, topics: { [topicLabel]: pct } };
-        return [...prev, youObj];
+        updatedYou = { id: "you", name: "You", role: "EIT, Structural", readiness: pct, topics: { [topicLabel]: pct } };
+        return [...prev, updatedYou];
       }
       const updated = [...prev];
       const youObj = { ...updated[meIdx] };
@@ -821,6 +870,7 @@ export default function App() {
       const vals = Object.values(youObj.topics);
       youObj.readiness = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
       updated[meIdx] = youObj;
+      updatedYou = youObj;
       return updated;
     });
 
@@ -833,6 +883,7 @@ export default function App() {
         });
         return next;
       });
+      let updatedMissed;
       setMissed((prev) => {
         let next = [...prev];
         results.forEach(({ q, correct: wasCorrect }) => {
@@ -840,8 +891,14 @@ export default function App() {
           if (!wasCorrect && !exists) next.push(q);
           if (wasCorrect && exists) next = next.filter((x) => x.id !== q.id);
         });
+        updatedMissed = next;
         return next;
       });
+      // Save this account's progress to the database, not the browser, so it
+      // follows the person's login rather than the device they're using.
+      if (updatedYou) {
+        Promise.resolve().then(() => saveProgressToServer(updatedYou, updatedMissed || missed));
+      }
       // Push the real answer counts to Supabase so difficulty scoring accumulates
       // across everyone who uses the app, not just this browser.
       results.forEach(({ q, correct: wasCorrect }) => {
@@ -971,7 +1028,11 @@ export default function App() {
             <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
           <div className="flex gap-1 flex-wrap items-center">
-            {[["practice", "Practice"], ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []), ["dashboard", "Manager view"]].map(([key, label]) => (
+            {[
+              ["practice", "Practice"],
+              ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []),
+              ...(profile?.role === "admin" || profile?.role === "manager" ? [["dashboard", "Manager view"]] : []),
+            ].map(([key, label]) => (
               <button key={key} onClick={() => setView(key)} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5"
                 style={{ borderColor: INK, background: PAPER_2, color: view === key ? AMBER : INK, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {key === "review" && bank.pending.length > 0 && (
@@ -981,7 +1042,7 @@ export default function App() {
               </button>
             ))}
             <span className="text-[10px] ml-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
-              {session.user.email} {profile?.role === "admin" && "· admin"}
+              {session.user.email} {profile?.role && profile.role !== "member" && `· ${profile.role}`}
             </span>
             <button onClick={() => supabase.auth.signOut()} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
               style={{ borderColor: INK, background: PAPER_2, color: INK, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -990,7 +1051,7 @@ export default function App() {
           </div>
         </div>
         <p className="text-xs mb-8" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-          Demo version. The question bank is shared and permanent. Your personal quiz progress is saved in this browser and isn't yet shared across devices or with other people.{" "}
+          Demo version. The question bank is shared and permanent. Your quiz progress is now saved to your account and follows you across devices.{" "}
           <button onClick={resetDemo} className="underline" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif" }}>
             Reset my demo progress
           </button>
@@ -1006,9 +1067,9 @@ export default function App() {
           </div>
         ) : (
           <>
-            {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} questionStats={questionStats} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
+            {view === "practice" && <PracticeView bank={bank} missed={missed} you={you} questionStats={questionStats} isAdmin={profile?.role === "admin"} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
             {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} />}
-            {view === "dashboard" && <DashboardView team={team} bank={bank} missed={missed} />}
+            {view === "dashboard" && (profile?.role === "admin" || profile?.role === "manager") && <DashboardView team={team} bank={bank} missed={missed} />}
           </>
         )}
       </div>

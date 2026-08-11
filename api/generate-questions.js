@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { topic } = req.body || {};
+  const { topic, examples } = req.body || {};
   if (!topic) {
     return res.status(400).json({ error: "Missing topic" });
   }
@@ -14,7 +14,18 @@ export default async function handler(req, res) {
   const system =
     "You are an expert item-writer for the NCEES PE Civil: Structural exam. Generate original multiple-choice practice questions that test understanding of civil/structural engineering concepts at PE Civil: Structural exam style and difficulty. Write strictly from general engineering knowledge — do not reference, quote, closely paraphrase, or reconstruct content from any specific textbook, commercial test-prep product, or code document (e.g. ACI, ASCE, NCEES materials). Vary the numeric values, units, and scenario framing meaningfully across questions so each generation is distinct from prior ones. Respond ONLY with valid minified JSON and nothing else — no markdown fences, no commentary. Schema: {\"questions\":[{\"question\":string,\"options\":[string,string,string,string],\"correctIndex\":number,\"explanation\":string}]}. Keep each explanation under 35 words.";
 
-  const user = `Generate 4 original practice questions for the topic "${topic}" at PE Civil: Structural exam difficulty.`;
+  let user = `Generate 4 original practice questions for the topic "${topic}" at PE Civil: Structural exam difficulty.`;
+
+  // If we have examples of this product's OWN already-approved questions on this
+  // topic, include them as grounding — new questions should match their accuracy,
+  // rigor, and style, without copying them. This is our own reviewed content, not
+  // an external copyrighted source, so referencing it directly is safe.
+  if (Array.isArray(examples) && examples.length > 0) {
+    const exampleText = examples
+      .map((ex, i) => `Example ${i + 1}:\nQ: ${ex.question}\nOptions: ${ex.options.join(" | ")}\nCorrect: ${ex.options[ex.correctIndex]}\nExplanation: ${ex.explanation}`)
+      .join("\n\n");
+    user += `\n\nHere are ${examples.length} examples of questions on this topic that have already been reviewed and approved by a licensed engineer for accuracy and style. Use them ONLY as a reference for the expected level of rigor, tone, and question structure — do not copy their content, numbers, or scenarios. Write genuinely new questions inspired by the same standard of quality:\n\n${exampleText}`;
+  }
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -26,7 +37,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1000,
+        max_tokens: 1200,
         system,
         messages: [{ role: "user", content: user }],
       }),
