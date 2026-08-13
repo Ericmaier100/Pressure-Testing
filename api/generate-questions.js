@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { topic, examples } = req.body || {};
+  const { topic, examples, feedback } = req.body || {};
   if (!topic) {
     return res.status(400).json({ error: "Missing topic" });
   }
@@ -25,6 +25,13 @@ export default async function handler(req, res) {
       .map((ex, i) => `Example ${i + 1}:\nQ: ${ex.question}\nOptions: ${ex.options.join(" | ")}\nCorrect: ${ex.options[ex.correctIndex]}\nExplanation: ${ex.explanation}`)
       .join("\n\n");
     user += `\n\nHere are ${examples.length} examples of questions on this topic that have already been reviewed and approved by a licensed engineer for accuracy and style. Use them ONLY as a reference for the expected level of rigor, tone, and question structure — do not copy their content, numbers, or scenarios. Write genuinely new questions inspired by the same standard of quality:\n\n${exampleText}`;
+  }
+
+  // Recent admin rejection reasons for this topic — short plain-text notes only,
+  // never the rejected question text itself, to keep this addition cheap in tokens.
+  if (Array.isArray(feedback) && feedback.length > 0) {
+    const feedbackText = feedback.map((f, i) => `${i + 1}. ${f}`).join("\n");
+    user += `\n\nAn admin previously rejected generated questions on this topic for these reasons — avoid repeating these issues:\n${feedbackText}`;
   }
 
   try {

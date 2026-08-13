@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from "recharts";
-import { Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Users, ClipboardList, Inbox, Timer, RotateCcw, Target } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Users, ClipboardList, Inbox, Timer, RotateCcw, Target, Eye, EyeOff } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
 const TOPICS = [
@@ -12,15 +12,16 @@ const TOPICS = [
 ];
 
 // Warm "drafting vellum" palette — cream/tan paper tones instead of dark blueprint
-const PAPER = "#F3F6F7";    // page background — soft, muted blue-gray, not bright white
+const PAPER = "#F3F6F7";    // card/panel background — soft, muted blue-gray, not bright white
 const PAPER_2 = "#FAFCFC";  // sheet/panel/card background — gentle off-white
+const CANVAS = "#16303F";   // outer page canvas — dark blueprint navy; cards stay light on top of it
+const CANVAS_GRID = "rgba(255,255,255,0.07)"; // ruled grid lines etched into the blueprint canvas
 const INK = "#3A4750";      // primary text and outlines — softened slate, not near-black
 const LINE = INK;           // kept as an alias so no text ends up unreadable
 const STEEL = "#8398A6";    // secondary text — soft muted blue-gray
 const AMBER = "#C79552";    // accent — muted, desaturated amber
 const RED = "#B5514A";      // incorrect / weak — softened terracotta
 const GREEN = "#4F8058";    // correct / strong — muted sage green
-const GRID_LINE = "#E9EEF0"; // barely-there calc-pad grid lines
 
 let idCounter = 300;
 function nextId() {
@@ -151,6 +152,26 @@ function pickAdaptiveSet(pool, accuracy, count, priorityQuestions = [], stats = 
   return [...priorityQuestions, ...picked];
 }
 
+// A person's per-topic record is stored as { attempts, correct } so it accumulates
+// across every quiz they ever take (baseline, quick, timed, adaptive alike) instead
+// of being overwritten by whichever set they answered most recently. This reads that
+// as a 0-100 percentage; it also tolerates the old plain-number format (mock team
+// data, or pre-migration accounts) so nothing crashes on legacy shapes.
+function topicPct(val) {
+  if (val == null) return undefined;
+  if (typeof val === "number") return val;
+  if (typeof val === "object" && val.attempts > 0) return Math.round((val.correct / val.attempts) * 100);
+  return undefined;
+}
+
+// Total questions a person has ever answered across all topics — used to gate
+// Adaptive practice behind a 20-question baseline.
+function totalAttempts(topics) {
+  return Object.values(topics || {}).reduce((sum, v) => sum + (v && typeof v === "object" ? v.attempts : 0), 0);
+}
+
+const BASELINE_TARGET = 20;
+
 function DimensionBar({ label, value }) {
   const color = scoreColor(value);
   return (
@@ -168,12 +189,19 @@ function DimensionBar({ label, value }) {
   );
 }
 
+function CornerTicks({ variant = "all" }) {
+  const marks = variant === "all"
+    ? ["top-0 left-0 border-t-2 border-l-2", "top-0 right-0 border-t-2 border-r-2", "bottom-0 left-0 border-b-2 border-l-2", "bottom-0 right-0 border-b-2 border-r-2"]
+    : ["top-0 left-0 border-t-2 border-l-2", "bottom-0 right-0 border-b-2 border-r-2"];
+  return marks.map((pos, i) => (
+    <span key={i} className={`pointer-events-none absolute ${pos} w-2.5 h-2.5`} style={{ borderColor: AMBER }} />
+  ));
+}
+
 function Sheet({ sheetNo, title, children }) {
   return (
     <div className="relative border rounded-none p-6" style={{ borderColor: INK, borderWidth: 1, background: PAPER_2 }}>
-      {["top-2 left-2 border-l border-t", "top-2 right-2 border-r border-t", "bottom-2 left-2 border-l border-b", "bottom-2 right-2 border-r border-b"].map((pos, i) => (
-        <div key={i} className={`absolute ${pos} w-3 h-3`} style={{ borderColor: STEEL, opacity: 0.6 }} />
-      ))}
+      <CornerTicks variant="all" />
       <div className="mb-5">
         <div className="text-[10px] uppercase tracking-[0.2em]" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Sheet {sheetNo}</div>
         <h2 className="text-xl mt-1" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>{title}</h2>
@@ -186,18 +214,26 @@ function Sheet({ sheetNo, title, children }) {
   );
 }
 
-async function generateQuestions(topic, referenceQuestions = []) {
+async function generateQuestions(topic, referenceQuestions = [], rejectionNotes = []) {
   // Calls our own safe backend endpoint (api/generate-questions.js) instead of
   // Anthropic directly — the real API key lives only on the server, never here.
   // referenceQuestions: a few of THIS PRODUCT'S OWN already-approved questions on
   // this topic, sent along as grounding so new questions match their accuracy/style.
+  // rejectionNotes: short admin-written reasons a few PAST generated questions on this
+  // topic were rejected (e.g. "too easy", "ambiguous wording", "wrong code reference").
+  // Kept as plain reason strings only (not the rejected question text) and capped at 3
+  // to keep the prompt — and token usage — small.
   const examples = referenceQuestions.slice(0, 3).map((q) => ({
     question: q.question, options: q.options, correctIndex: q.correctIndex, explanation: q.explanation,
   }));
+  const feedback = rejectionNotes
+    .filter(Boolean)
+    .slice(-3)
+    .map((n) => n.trim().slice(0, 200));
   const response = await fetch("/api/generate-questions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic, examples }),
+    body: JSON.stringify({ topic, examples, feedback }),
   });
   const data = await response.json();
   const textBlock = (data.content || []).find((b) => b.type === "text");
@@ -264,7 +300,7 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
 }
 
 function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGeneration, onCompleteQuiz }) {
-  const [mode, setMode] = useState(isAdmin ? "adaptive" : "quick");
+  const [mode, setMode] = useState(null); // null = landing chooser
   const [topic, setTopic] = useState(TOPICS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -281,8 +317,18 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
   const hasEnough = approvedForTopic.length >= 4;
   const totalApproved = bank.approved.length;
   const canRunExam = totalApproved >= 6;
+  const canRunBaseline = totalApproved >= 10;
+  // Most recent rejection reasons an admin left for this topic — used to steer
+  // the AI away from whatever made past generations get rejected.
+  const rejectionNotesForTopic = bank.rejected
+    .filter((q) => q.topic === topic && q.note)
+    .map((q) => q.note);
 
   const eligibleTopics = TOPICS.filter((t) => bank.approved.filter((q) => q.topic === t).length >= 4);
+
+  const attemptsSoFar = totalAttempts(you.topics);
+  const baselineComplete = attemptsSoFar >= BASELINE_TARGET;
+  const questionsUntilBaseline = Math.max(0, BASELINE_TARGET - attemptsSoFar);
 
   useEffect(() => {
     if (mode === "timed" && quiz && !submitted && timeLeft !== null) {
@@ -301,6 +347,22 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, quiz, submitted]);
 
+  function openMode(key) {
+    setMode(key);
+    setQuiz(null);
+    setRequested(false);
+    setError(null);
+  }
+
+  function backToChooser() {
+    setMode(null);
+    setQuiz(null);
+    setSubmitted(false);
+    setAnswers({});
+    setMissedThisAttempt(null);
+    setTimeLeft(null);
+  }
+
   function startQuick() {
     const missedForTopic = missed.filter((q) => q.topic === topic).slice(0, 2);
     const missedIds = new Set(missedForTopic.map((q) => q.id));
@@ -314,15 +376,17 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
   }
 
   function startAdaptive() {
-    if (eligibleTopics.length === 0) return;
+    if (!baselineComplete || eligibleTopics.length === 0) return;
     // Weakest topic wins; unattempted topics default to 50 so they surface for coverage
-    const ranked = [...eligibleTopics].sort((a, b) => (you.topics[a] ?? 50) - (you.topics[b] ?? 50));
+    const ranked = [...eligibleTopics].sort((a, b) => (topicPct(you.topics[a]) ?? 50) - (topicPct(you.topics[b]) ?? 50));
     const target = ranked[0];
     setAdaptiveTopic(target);
-    const acc = you.topics[target] ?? 50;
+    const acc = topicPct(you.topics[target]) ?? 50;
     const pool = bank.approved.filter((q) => q.topic === target);
-    const missedForTopic = missed.filter((q) => q.topic === target).slice(0, 2);
-    const set = pickAdaptiveSet(pool, acc, 4, missedForTopic, questionStats);
+    // No previously-missed questions mixed back in here — Adaptive only ever
+    // serves fresh questions from the weak topic. Missed questions still live in
+    // the review queue and can be retried from there or from Quick set.
+    const set = pickAdaptiveSet(pool, acc, 4, [], questionStats);
     setQuiz(set);
     setAnswers({});
     setSubmitted(false);
@@ -339,11 +403,33 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
     setTimeLeft(pool.length * 120);
   }
 
+  function startBaseline() {
+    // Sample roughly evenly across every topic that has approved questions, then
+    // fill any remaining slots from whichever topics have extra, capped at 20.
+    const perTopicTarget = Math.floor(BASELINE_TARGET / TOPICS.length);
+    let picked = [];
+    TOPICS.forEach((t) => {
+      const pool = bank.approved.filter((q) => q.topic === t).sort(() => Math.random() - 0.5);
+      picked.push(...pool.slice(0, perTopicTarget));
+    });
+    if (picked.length < BASELINE_TARGET) {
+      const usedIds = new Set(picked.map((q) => q.id));
+      const remainder = bank.approved.filter((q) => !usedIds.has(q.id)).sort(() => Math.random() - 0.5);
+      picked.push(...remainder.slice(0, BASELINE_TARGET - picked.length));
+    }
+    picked = picked.slice(0, BASELINE_TARGET);
+    setQuiz(picked);
+    setAnswers({});
+    setSubmitted(false);
+    setMissedThisAttempt(null);
+    setTimeLeft(null);
+  }
+
   async function requestMore() {
     setLoading(true);
     setError(null);
     try {
-      const qs = await generateQuestions(topic, approvedForTopic);
+      const qs = await generateQuestions(topic, approvedForTopic, rejectionNotesForTopic);
       onRequestGeneration(qs);
       setRequested(true);
     } catch (e) {
@@ -359,7 +445,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
     const correct = results.filter((r) => r.correct).length;
     const missedNow = results.filter((r) => !r.correct).map((r) => r.q);
     setMissedThisAttempt(missedNow);
-    const label = mode === "timed" ? "Timed mock exam" : mode === "adaptive" ? adaptiveTopic : topic;
+    const label = mode === "timed" ? "Timed mock exam" : mode === "baseline" ? "Baseline test" : mode === "adaptive" ? adaptiveTopic : topic;
     onCompleteQuiz(label, correct, quiz.length, results);
   }
 
@@ -374,22 +460,71 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
   const allAnswered = quiz && quiz.every((_, i) => answers[i] !== undefined);
   const score = submitted && quiz ? quiz.filter((q, i) => answers[i] === q.correctIndex).length : null;
 
+  if (mode === null) {
+    return (
+      <Sheet sheetNo="1 of 4" title="Practice">
+        {!baselineComplete && (
+          <div className="mb-6 p-4 border" style={{ borderColor: AMBER }}>
+            <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>Recommended first step</div>
+            <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              Take a {BASELINE_TARGET}-question baseline test across every topic. It's what unlocks Adaptive practice — {questionsUntilBaseline} question{questionsUntilBaseline === 1 ? "" : "s"} to go{attemptsSoFar > 0 ? " (any practice you've already done counts toward this)" : ""}.
+            </div>
+            {canRunBaseline ? (
+              <button onClick={() => openMode("baseline")} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                <Target className="w-4 h-4" /> Start baseline test
+              </button>
+            ) : (
+              <span className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Need at least 10 approved questions in the bank first.</span>
+            )}
+          </div>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="group relative">
+            <button
+              onClick={() => baselineComplete && openMode("adaptive")}
+              disabled={!baselineComplete}
+              className="w-full h-full text-left p-4 border rounded-none disabled:opacity-40"
+              style={{ borderColor: STEEL, background: PAPER_2 }}
+            >
+              <Target className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+              <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Adaptive</div>
+              <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                {baselineComplete ? "Automatically targets your weakest topic." : `Locked — finish your baseline test (${questionsUntilBaseline} question${questionsUntilBaseline === 1 ? "" : "s"} to go).`}
+              </div>
+            </button>
+            <div className="hidden group-hover:block absolute z-10 left-0 top-full mt-1 w-64 p-3 text-xs border" style={{ background: PAPER_2, borderColor: INK, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              Adapts to your weakest topics using your practice history — always fresh questions, never repeats of ones you've missed before. Needs {BASELINE_TARGET} answered questions first so it has enough data to work from.
+            </div>
+          </div>
+
+          <button onClick={() => openMode("timed")} className="text-left p-4 border rounded-none" style={{ borderColor: STEEL, background: PAPER_2 }}>
+            <Timer className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+            <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Timed random exam</div>
+            <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>A {Math.min(10, totalApproved)}-question mock exam, ~2 min/question, pulled at random across every topic.</div>
+          </button>
+
+          <button onClick={() => openMode("quick")} className="text-left p-4 border rounded-none" style={{ borderColor: STEEL, background: PAPER_2 }}>
+            <RefreshCw className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+            <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Un-timed specific review</div>
+            <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Pick a topic yourself and go at your own pace.</div>
+          </button>
+        </div>
+
+        {missed.length > 0 && (
+          <div className="mt-5 text-[11px]" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>
+            {missed.length} question{missed.length === 1 ? "" : "s"} in your review queue — retry them from Un-timed specific review.
+          </div>
+        )}
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet sheetNo="1 of 4" title="Practice">
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        {[...(isAdmin ? [["adaptive", "Adaptive"]] : []), ["quick", "Quick set"], ["timed", "Timed mock exam"]].map(([key, label]) => (
-          <button key={key} onClick={() => { setMode(key); setQuiz(null); setRequested(false); }}
-            className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
-            style={{ borderColor: mode === key ? AMBER : STEEL, color: mode === key ? AMBER : STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
-            {label}
-          </button>
-        ))}
-        {missed.length > 0 && (
-          <span className="text-[11px] ml-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>
-            {missed.length} question{missed.length === 1 ? "" : "s"} in your review queue
-          </span>
-        )}
-      </div>
+      <button onClick={backToChooser} className="text-xs mb-5 uppercase tracking-wide" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>
+        ← Back to practice options
+      </button>
 
       {mode === "adaptive" && (
         <div className="mb-6">
@@ -397,7 +532,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
             <Target className="w-4 h-4" />{quiz ? "New adaptive set" : "Start adaptive practice"}
           </button>
           <p className="text-xs mt-2" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            Automatically targets your weakest topic{adaptiveTopic ? ` — currently: ${adaptiveTopic}` : ""} and matches question difficulty to your current accuracy there. Questions you've missed before are mixed back in first.
+            Automatically targets your weakest topic{adaptiveTopic ? ` — currently: ${adaptiveTopic}` : ""} and matches question difficulty to your current accuracy there.
           </p>
         </div>
       )}
@@ -432,6 +567,15 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
               <Timer className="w-4 h-4" />{formatTime(timeLeft)}
             </span>
           )}
+        </div>
+      )}
+
+      {mode === "baseline" && (
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <button onClick={startBaseline} disabled={!canRunBaseline} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            <Target className="w-4 h-4" />{quiz ? "New baseline test" : `Start ${BASELINE_TARGET}-question baseline test`}
+          </button>
+          {!canRunBaseline && <span className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Need at least 10 approved questions in the bank first.</span>}
         </div>
       )}
 
@@ -618,7 +762,7 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
 
 function DashboardView({ team, bank, missed }) {
   const topicAverages = useMemo(() => TOPICS.map((t) => {
-    const vals = team.map((e) => e.topics[t]).filter((v) => v !== undefined);
+    const vals = team.map((e) => topicPct(e.topics[t])).filter((v) => v !== undefined);
     const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
     const approvedCount = bank.approved.filter((q) => q.topic === t).length;
     return { topic: t.split(" (")[0], value: avg, approvedCount };
@@ -674,6 +818,7 @@ function AuthScreen({ onAuthed }) {
   const [mode, setMode] = useState("signin"); // 'signin' or 'signup'
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [confirmMsg, setConfirmMsg] = useState(null);
@@ -696,9 +841,10 @@ function AuthScreen({ onAuthed }) {
   }
 
   return (
-    <div style={{ background: PAPER, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ background: CANVAS, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');`}</style>
-      <div className="border w-full max-w-sm p-6" style={{ borderColor: INK, background: PAPER_2 }}>
+      <div className="relative border w-full max-w-sm p-6" style={{ borderColor: INK, background: PAPER_2 }}>
+        <CornerTicks variant="all" />
         <div className="mb-6">
           <h1 className="text-2xl" style={{ color: INK, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
           <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -708,8 +854,20 @@ function AuthScreen({ onAuthed }) {
         <form onSubmit={submit} className="space-y-3">
           <input type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }} />
-          <input type="password" required placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+          <div className="relative">
+            <input type={showPassword ? "text" : "password"} required placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 pr-9 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              tabIndex={-1}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-0 top-0 h-full px-2.5 flex items-center"
+              style={{ background: "none", border: "none", cursor: "pointer", color: STEEL }}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           {error && <div className="text-xs" style={{ color: RED }}>{error}</div>}
           {confirmMsg && <div className="text-xs" style={{ color: GREEN }}>{confirmMsg}</div>}
           <button type="submit" disabled={loading} className="w-full py-2 text-sm font-semibold rounded-none disabled:opacity-60"
@@ -856,21 +1014,37 @@ export default function App() {
   const you = team.find((e) => e.id === "you") || { topics: {} };
 
   function recordResult(topicLabel, correct, total, results) {
-    const pct = Math.round((correct / total) * 100);
     let updatedYou;
     setTeam((prev) => {
       const meIdx = prev.findIndex((e) => e.id === "you");
-      if (meIdx === -1) {
-        updatedYou = { id: "you", name: "You", role: "EIT, Structural", readiness: pct, topics: { [topicLabel]: pct } };
-        return [...prev, updatedYou];
+      const base = meIdx === -1
+        ? { id: "you", name: "You", role: "EIT, Structural", readiness: 0, topics: {} }
+        : { ...prev[meIdx] };
+      const topics = { ...base.topics };
+      if (results && results.length) {
+        // Attribute every question to ITS OWN topic, regardless of which mode the
+        // quiz was — so a timed mock exam (which spans every topic) also feeds
+        // topic-level weakness tracking, not just Quick/Adaptive sets.
+        results.forEach(({ q, correct: wasCorrect }) => {
+          const t = q.topic;
+          if (!t) return;
+          const cur = topics[t] && typeof topics[t] === "object" ? topics[t] : { attempts: 0, correct: 0 };
+          topics[t] = { attempts: cur.attempts + 1, correct: cur.correct + (wasCorrect ? 1 : 0) };
+        });
+      } else {
+        const cur = topics[topicLabel] && typeof topics[topicLabel] === "object" ? topics[topicLabel] : { attempts: 0, correct: 0 };
+        topics[topicLabel] = { attempts: cur.attempts + total, correct: cur.correct + correct };
       }
-      const updated = [...prev];
-      const youObj = { ...updated[meIdx] };
-      youObj.topics = { ...youObj.topics, [topicLabel]: pct };
-      const vals = Object.values(youObj.topics);
-      youObj.readiness = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-      updated[meIdx] = youObj;
+      const totals = Object.values(topics).reduce((acc, v) => {
+        if (v && typeof v === "object") { acc.attempts += v.attempts; acc.correct += v.correct; }
+        return acc;
+      }, { attempts: 0, correct: 0 });
+      const readiness = totals.attempts > 0 ? Math.round((totals.correct / totals.attempts) * 100) : 0;
+      const youObj = { ...base, topics, readiness };
       updatedYou = youObj;
+      if (meIdx === -1) return [...prev, youObj];
+      const updated = [...prev];
+      updated[meIdx] = youObj;
       return updated;
     });
 
@@ -1001,8 +1175,8 @@ export default function App() {
 
   if (session === undefined) {
     return (
-      <div style={{ background: PAPER, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Loader2 className="w-5 h-5 animate-spin" style={{ color: STEEL }} />
+      <div style={{ background: CANVAS, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 className="w-5 h-5 animate-spin" style={{ color: PAPER_2 }} />
       </div>
     );
   }
@@ -1013,7 +1187,7 @@ export default function App() {
 
   return (
     <div style={{
-      background: `repeating-linear-gradient(0deg, transparent, transparent 23px, ${GRID_LINE} 23px, ${GRID_LINE} 24px), repeating-linear-gradient(90deg, transparent, transparent 23px, ${GRID_LINE} 23px, ${GRID_LINE} 24px), ${PAPER}`,
+      background: `repeating-linear-gradient(0deg, transparent, transparent 23px, ${CANVAS_GRID} 23px, ${CANVAS_GRID} 24px), repeating-linear-gradient(90deg, transparent, transparent 23px, ${CANVAS_GRID} 23px, ${CANVAS_GRID} 24px), ${CANVAS}`,
       backgroundPosition: "20px 28px",
       minHeight: "100%", padding: "28px 20px"
     }}>
@@ -1023,7 +1197,8 @@ export default function App() {
       `}</style>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-end justify-between mb-1 flex-wrap gap-3">
-          <div className="border px-4 py-2" style={{ borderColor: INK, background: PAPER_2 }}>
+          <div className="relative border px-4 py-2" style={{ borderColor: INK, background: PAPER_2 }}>
+            <CornerTicks variant="two" />
             <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
             <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
@@ -1033,8 +1208,9 @@ export default function App() {
               ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []),
               ...(profile?.role === "admin" || profile?.role === "manager" ? [["dashboard", "Manager view"]] : []),
             ].map(([key, label]) => (
-              <button key={key} onClick={() => setView(key)} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5"
+              <button key={key} onClick={() => setView(key)} className="relative px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5"
                 style={{ borderColor: INK, background: PAPER_2, color: view === key ? AMBER : INK, fontFamily: "'IBM Plex Mono', monospace" }}>
+                <CornerTicks variant="two" />
                 {key === "review" && bank.pending.length > 0 && (
                   <span className="inline-flex items-center justify-center rounded-full text-[9px] w-4 h-4" style={{ background: AMBER, color: INK }}>{bank.pending.length}</span>
                 )}
@@ -1044,8 +1220,9 @@ export default function App() {
             <span className="text-[10px] ml-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
               {session.user.email} {profile?.role && profile.role !== "member" && `· ${profile.role}`}
             </span>
-            <button onClick={() => supabase.auth.signOut()} className="px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
+            <button onClick={() => supabase.auth.signOut()} className="relative px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
               style={{ borderColor: INK, background: PAPER_2, color: INK, fontFamily: "'IBM Plex Mono', monospace" }}>
+              <CornerTicks variant="two" />
               Sign out
             </button>
           </div>
