@@ -206,9 +206,6 @@ function Sheet({ sheetNo, title, children }) {
         <h2 className="text-xl mt-1" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>{title}</h2>
       </div>
       {children}
-      <div className="mt-6 pt-3 flex justify-between text-[10px] uppercase tracking-[0.15em]" style={{ borderTop: `1px solid ${STEEL}`, color: STEEL, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.7 }}>
-        <span>Scale: NTS</span><span>Pressure Testing — Prototype</span><span>Rev D</span>
-      </div>
     </div>
   );
 }
@@ -479,22 +476,18 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
         )}
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="group relative">
-            <button
-              onClick={() => baselineComplete && openMode("adaptive")}
-              disabled={!baselineComplete}
-              className="pt-btn w-full h-full text-left p-4 border rounded-none disabled:opacity-40"
-            >
-              <Target className="w-4 h-4 mb-2" style={{ color: AMBER }} />
-              <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Adaptive</div>
-              <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                {baselineComplete ? "Shows you questions based on your weakest topics." : `Locked — ${questionsUntilBaseline} more question${questionsUntilBaseline === 1 ? "" : "s"} to go.`}
-              </div>
-            </button>
-            <div className="hidden group-hover:block absolute z-10 left-0 top-full mt-1 w-64 p-3 text-xs border" style={{ background: PAPER_2, borderColor: INK, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-              Adaptive practice shows you questions based on your weakest topics. It continuously assesses your weak topics based on practice question performance. It requires you to answer 20 practice questions first.
+          <button
+            onClick={() => baselineComplete && openMode("adaptive")}
+            disabled={!baselineComplete}
+            className="pt-btn text-left p-4 border rounded-none disabled:opacity-40"
+          >
+            <Target className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+            <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Adaptive</div>
+            <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              Shows you questions based on your weakest topics. Continuously assesses your weak topics based on practice question performance.
+              {!baselineComplete && ` Locked — ${questionsUntilBaseline} more question${questionsUntilBaseline === 1 ? "" : "s"} to go.`}
             </div>
-          </div>
+          </button>
 
           <button onClick={() => openMode("timed")} className="pt-btn text-left p-4 border rounded-none">
             <Timer className="w-4 h-4 mb-2" style={{ color: AMBER }} />
@@ -504,14 +497,14 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
 
           <button onClick={() => openMode("quick")} className="pt-btn text-left p-4 border rounded-none">
             <RefreshCw className="w-4 h-4 mb-2" style={{ color: AMBER }} />
-            <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Un-timed specific review</div>
+            <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Specific review</div>
             <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Pick a topic yourself and go at your own pace.</div>
           </button>
         </div>
 
         {missed.length > 0 && (
           <div className="mt-5 text-[11px]" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>
-            {missed.length} question{missed.length === 1 ? "" : "s"} in your review queue — retry them from Un-timed specific review.
+            {missed.length} question{missed.length === 1 ? "" : "s"} in your review queue — retry them from Specific review.
           </div>
         )}
       </Sheet>
@@ -1209,14 +1202,9 @@ export default function App() {
       `}</style>
       <div className="max-w-3xl mx-auto">
         <div className="flex items-end justify-between mb-1 flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <button onClick={goHome} title="Back to home" aria-label="Back to home" className="pt-btn p-2 border rounded-none flex items-center justify-center">
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="border px-4 py-2" style={{ borderColor: INK, background: PAPER_2 }}>
-              <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
-              <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
-            </div>
+          <div className="border px-4 py-2" style={{ borderColor: INK, background: PAPER_2 }}>
+            <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
+            <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
           <div className="flex gap-1 flex-wrap items-center">
             {[
@@ -1233,19 +1221,25 @@ export default function App() {
                 {label}
               </button>
             ))}
-            <span className="text-[10px] ml-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
-              {session.user.email} {profile?.role && profile.role !== "member" && `· ${profile.role}`}
-            </span>
+            <div className="text-[10px] ml-2 text-right leading-tight" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <div style={{ color: STEEL }}>{session.user.email}</div>
+              {profile?.role && profile.role !== "member" && (
+                <div style={{ color: profile.role === "admin" ? RED : STEEL }}>{profile.role}</div>
+              )}
+            </div>
             <button onClick={() => supabase.auth.signOut()} className="pt-btn px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
               style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               Sign out
             </button>
           </div>
         </div>
-        <p className="text-xs mb-8" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-          Demo version. The question bank is shared and permanent. Your quiz progress is now saved to your account and follows you across devices.{" "}
+        <button onClick={goHome} className="flex items-center gap-1.5 text-xs uppercase tracking-wide mb-4 mt-3" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back
+        </button>
+        <p className="text-xs mb-8 flex items-center gap-3 flex-wrap" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          Demo version.
           <button onClick={resetDemo} className="underline" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            Reset my demo progress
+            Reset Progress
           </button>
         </p>
         {bankError && (
