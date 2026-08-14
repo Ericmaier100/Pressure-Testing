@@ -891,7 +891,153 @@ function DiagramSampleLibrary({ samples, onUpload, onDelete }) {
   );
 }
 
-function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveEdit, onExport, diagramSamples, onAddDiagramSample, onDeleteDiagramSample, onGenerateDiagram }) {
+// Lets an admin write a brand-new question from scratch — the only way in
+// before this was AI generation or the original seed data. Saves straight to
+// "approved" status, since the admin writing it is the same person who'd
+// otherwise approve it out of the pending queue.
+function NewQuestionForm({ onSave, onCancel, onGenerateDiagram }) {
+  const [draft, setDraft] = useState({ topic: TOPICS[0], question: "", options: ["", "", "", ""], correctIndex: 0, explanation: "", imageUrls: [] });
+  const [saving, setSaving] = useState(false);
+  const [genLoading, setGenLoading] = useState(false);
+  const [genError, setGenError] = useState(null);
+  const [genSvg, setGenSvg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  function updateOption(i, val) {
+    setDraft((d) => { const opts = [...d.options]; opts[i] = val; return { ...d, options: opts }; });
+  }
+
+  async function generateDiagram() {
+    if (!draft.question.trim()) { setGenError("Write the question text first."); return; }
+    setGenLoading(true); setGenError(null); setGenSvg(null);
+    try {
+      setGenSvg(await onGenerateDiagram(draft.topic, draft.question));
+    } catch (e) {
+      setGenError("Couldn't generate a diagram. Try again.");
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  async function useGeneratedDiagram() {
+    try {
+      const blob = new Blob([genSvg], { type: "image/svg+xml" });
+      const file = new File([blob], `diagram-${Date.now()}.svg`, { type: "image/svg+xml" });
+      const url = await uploadQuestionImage(file);
+      setDraft((d) => ({ ...d, imageUrls: [...(d.imageUrls || []), url] }));
+      setGenSvg(null);
+    } catch (e) {
+      setGenError("Couldn't save that diagram. Try again.");
+    }
+  }
+
+  async function handleSave() {
+    setErr(null);
+    if (!draft.question.trim()) { setErr("Write the question text."); return; }
+    if (draft.options.some((o) => !o.trim())) { setErr("Fill in all 4 answer options."); return; }
+    if (!draft.explanation.trim()) { setErr("Add a short explanation."); return; }
+    setSaving(true);
+    const ok = await onSave(draft);
+    setSaving(false);
+    if (!ok) setErr("Couldn't save. Try again.");
+  }
+
+  return (
+    <div className="mb-8 p-4 border" style={{ borderColor: AMBER, background: PAPER_2 }}>
+      <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>New question</div>
+      <select value={draft.topic} onChange={(e) => setDraft((d) => ({ ...d, topic: e.target.value }))}
+        className="mb-3 px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
+      </select>
+      <textarea placeholder="Question text" value={draft.question} onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
+        className="w-full mb-3 px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+      <ImageUploader images={draft.imageUrls} onChange={(imgs) => setDraft((d) => ({ ...d, imageUrls: imgs }))} disabled={saving} />
+      {onGenerateDiagram && (
+        <div className="mb-3">
+          <button type="button" onClick={generateDiagram} disabled={genLoading} className="pt-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-none border disabled:opacity-60" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            {genLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
+            {genLoading ? "Drawing…" : "Generate diagram (AI)"}
+          </button>
+          {genError && <div className="text-xs mt-1" style={{ color: RED }}>{genError}</div>}
+          {genSvg && (
+            <div className="mt-2 p-2 border" style={{ borderColor: AMBER, background: PAPER }}>
+              <img src={svgToDataUrl(genSvg)} alt="Generated diagram preview" className="max-h-48 border mb-2" style={{ borderColor: STEEL }} />
+              <div className="flex gap-2 flex-wrap">
+                <button type="button" onClick={useGeneratedDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Use this image</button>
+                <button type="button" onClick={generateDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Regenerate</button>
+                <button type="button" onClick={() => setGenSvg(null)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Discard</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="grid gap-2 mb-3">
+        {draft.options.map((opt, oi) => (
+          <div key={oi} className="flex items-center gap-2">
+            <input type="radio" checked={draft.correctIndex === oi} onChange={() => setDraft((d) => ({ ...d, correctIndex: oi }))} />
+            <input value={opt} onChange={(e) => updateOption(oi, e.target.value)} placeholder={`Option ${oi + 1}`}
+              className="flex-1 px-3 py-1.5 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+          </div>
+        ))}
+      </div>
+      <textarea placeholder="Explanation" value={draft.explanation} onChange={(e) => setDraft((d) => ({ ...d, explanation: e.target.value }))}
+        className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+      {err && <div className="text-xs mb-2" style={{ color: RED }}>{err}</div>}
+      <div className="flex gap-2">
+        <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-xs font-semibold rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>{saving ? "Saving…" : "Save question"}</button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// Lets an admin request new AI-generated questions for any topic, any time —
+// not just when a topic happens to be short on approved questions (that's the
+// only place this used to be reachable, buried inside Practice → Specific
+// review). Sends straight to the pending queue below, same as before.
+function GenerateQuestionsControl({ bank, onRequestGeneration }) {
+  const [topic, setTopic] = useState(TOPICS[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(0);
+
+  async function generate() {
+    setLoading(true);
+    setError(null);
+    try {
+      const approvedForTopic = bank.approved.filter((q) => q.topic === topic);
+      const rejectionNotes = bank.rejected.filter((q) => q.topic === topic && q.note).map((q) => q.note);
+      const qs = await generateQuestions(topic, approvedForTopic, rejectionNotes);
+      await onRequestGeneration(qs);
+      setDone(qs.length);
+    } catch (e) {
+      setError("Couldn't reach the AI generator right now. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mb-6 p-4 border" style={{ borderColor: STEEL, background: PAPER }}>
+      <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Generate AI questions</div>
+      <div className="flex flex-wrap items-center gap-3">
+        <select value={topic} onChange={(e) => { setTopic(e.target.value); setDone(0); setError(null); }} disabled={loading}
+          className="px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
+        </select>
+        <button onClick={generate} disabled={loading} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Inbox className="w-4 h-4" />}
+          {loading ? "Generating…" : "Generate 4 questions"}
+        </button>
+        {done > 0 && !loading && <span className="text-xs" style={{ color: GREEN, fontFamily: "'IBM Plex Sans', sans-serif" }}>Added {done} to Pending below.</span>}
+      </div>
+      {error && <div className="flex items-center gap-2 text-xs mt-2" style={{ color: RED }}><AlertTriangle className="w-3.5 h-3.5" /> {error}</div>}
+    </div>
+  );
+}
+
+function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveEdit, onExport, onAddQuestion, onRequestGeneration, diagramSamples, onAddDiagramSample, onDeleteDiagramSample, onGenerateDiagram }) {
+  const [showNewForm, setShowNewForm] = useState(false);
   return (
     <Sheet sheetNo="2 of 4" title="Review Queue — Admin Approval">
       {!isAdmin && (
@@ -899,6 +1045,7 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
           You can see what's pending, but only an admin account can approve or reject questions.
         </p>
       )}
+      {isAdmin && <GenerateQuestionsControl bank={bank} onRequestGeneration={onRequestGeneration} />}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div className="flex flex-wrap gap-8">
           <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Pending</div><div className="text-2xl font-semibold" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.pending.length}</div></div>
@@ -906,11 +1053,29 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
           <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Rejected</div><div className="text-2xl font-semibold" style={{ color: RED, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.rejected.length}</div></div>
         </div>
         {isAdmin && (
-          <button onClick={onExport} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: INK, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            Export full bank (.json)
-          </button>
+          <div className="flex gap-2">
+            {!showNewForm && (
+              <button onClick={() => setShowNewForm(true)} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                + Add new question
+              </button>
+            )}
+            <button onClick={onExport} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: INK, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              Export full bank (.json)
+            </button>
+          </div>
         )}
       </div>
+      {isAdmin && showNewForm && (
+        <NewQuestionForm
+          onGenerateDiagram={onGenerateDiagram}
+          onCancel={() => setShowNewForm(false)}
+          onSave={async (draft) => {
+            const ok = await onAddQuestion(draft);
+            if (ok) setShowNewForm(false);
+            return ok;
+          }}
+        />
+      )}
       {bank.pending.length === 0 && <p className="text-sm" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Nothing waiting for review.</p>}
       <div className="space-y-6">
         {bank.pending.map((q) =>
@@ -1403,6 +1568,38 @@ export default function App() {
     return true;
   }
 
+  // Lets an admin write a brand-new question by hand — previously the only way
+  // questions entered the bank was AI generation or the original seed data.
+  // Saves straight to "approved" since the admin writing it is the same person
+  // who'd otherwise approve it out of the pending queue.
+  async function addQuestion(newQ) {
+    const { data, error } = await supabase
+      .from("questions")
+      .insert({
+        topic: newQ.topic,
+        question: newQ.question,
+        options: newQ.options,
+        correct_index: newQ.correctIndex,
+        explanation: newQ.explanation,
+        image_urls: newQ.imageUrls || [],
+        status: "approved",
+      })
+      .select()
+      .single();
+    if (error) {
+      setBankError("Couldn't save the new question. Try again.");
+      return false;
+    }
+    setBank((b) => ({
+      ...b,
+      approved: [...b.approved, {
+        id: data.id, topic: data.topic, question: data.question, options: data.options,
+        correctIndex: data.correct_index, explanation: data.explanation, imageUrls: data.image_urls || [],
+      }],
+    }));
+    return true;
+  }
+
   async function exportBank() {
     const { data, error } = await supabase.from("questions").select("*").order("created_at", { ascending: true });
     if (error) {
@@ -1501,7 +1698,7 @@ export default function App() {
         ) : (
           <>
             {view === "practice" && <PracticeView key={homeKey} bank={bank} missed={missed} you={you} questionStats={questionStats} isAdmin={profile?.role === "admin"} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
-            {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} diagramSamples={diagramSamples} onAddDiagramSample={addDiagramSample} onDeleteDiagramSample={deleteDiagramSample} onGenerateDiagram={generateDiagramForQuestion} />}
+            {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} onAddQuestion={addQuestion} onRequestGeneration={addPending} diagramSamples={diagramSamples} onAddDiagramSample={addDiagramSample} onDeleteDiagramSample={deleteDiagramSample} onGenerateDiagram={generateDiagramForQuestion} />}
             {view === "dashboard" && (profile?.role === "admin" || profile?.role === "manager") && <DashboardView team={team} bank={bank} missed={missed} />}
           </>
         )}
