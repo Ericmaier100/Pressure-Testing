@@ -108,28 +108,6 @@ function targetScoreForAccuracy(accuracy) {
   return Math.max(1, Math.min(10, Math.round(1 + (accuracy / 100) * 9)));
 }
 
-// Saves each visitor's progress in their own browser so it survives a page reload —
-// no account or database needed for this demo stage. Progress is local to that
-// browser/device only; it won't follow someone to a different computer.
-const STORAGE_KEY = "pressure-testing-demo-state-v1";
-
-function loadSavedState() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function saveState(state) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    // Storage unavailable (e.g. private browsing) — fail silently, demo still works this session
-  }
-}
-
 function scoreColor(v) {
   if (v >= 75) return GREEN;
   if (v >= 60) return AMBER;
@@ -259,6 +237,11 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
               <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
                 <span style={{ fontWeight: 600 }}>Q{i + 1}. </span>{q.question}
               </div>
+              {q.imageUrls && q.imageUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {q.imageUrls.map((url) => (<img key={url} src={url} alt="" className="max-h-72 border" style={{ borderColor: STEEL, background: PAPER_2 }} />))}
+                </div>
+              )}
               <div className="grid gap-2">
                 {q.options.map((opt, oi) => {
                   const isSelected = picked === oi;
@@ -612,14 +595,99 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
   );
 }
 
-function EditableQuestionCard({ q, onApprove, onReject, onDelete, onSaveEdit }) {
+async function uploadQuestionImage(file) {
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("question-images").upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from("question-images").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function svgToDataUrl(svg) {
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+}
+
+// Lets an admin attach one or more original images (diagrams, charts, free-body
+// diagrams) to a question. Uploads go straight to Supabase Storage; only the
+// resulting public URLs are stored on the question row.
+function ImageUploader({ images, onChange, disabled }) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState(null);
+  const inputRef = useRef(null);
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      const urls = [];
+      for (const file of files) {
+        if (file.size > 5 * 1024 * 1024) { setErr("Each image must be under 5MB — skipped one that was too large."); continue; }
+        urls.push(await uploadQuestionImage(file));
+      }
+      if (urls.length) onChange([...(images || []), ...urls]);
+    } catch (e2) {
+      setErr("Upload failed. Check the question-images storage bucket is set up, then try again.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  function removeImage(url) {
+    onChange((images || []).filter((u) => u !== url));
+  }
+
+  return (
+    <div className="mb-3">
+      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Image(s) — diagram, chart, free-body diagram</div>
+      {images && images.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {images.map((url) => (
+            <div key={url} className="relative">
+              <img src={url} alt="" className="h-20 w-auto border" style={{ borderColor: STEEL, background: PAPER_2 }} />
+              <button type="button" onClick={() => removeImage(url)} disabled={disabled}
+                className="absolute -top-2 -right-2 rounded-full w-5 h-5 flex items-center justify-center text-[10px] leading-none"
+                style={{ background: RED, color: PAPER_2, border: "none", cursor: "pointer" }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label className="pt-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-none border cursor-pointer" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Inbox className="w-3.5 h-3.5" />}
+        {uploading ? "Uploading…" : "Add image"}
+        <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} disabled={disabled || uploading} className="hidden" />
+      </label>
+      <div className="text-[10px] mt-1" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        Only upload original diagrams you made yourself — no images copied from textbooks, code references, or the web.
+      </div>
+      {err && <div className="text-xs mt-1" style={{ color: RED }}>{err}</div>}
+    </div>
+  );
+}
+
+function EditableQuestionCard({ q, variant = "pending", onApprove, onReject, onDelete, onSaveEdit, onGenerateDiagram }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [genLoading, setGenLoading] = useState(false);
+  const [genError, setGenError] = useState(null);
+  const [genSvg, setGenSvg] = useState(null); // AI-drawn diagram awaiting accept/discard
 
   function startEdit() {
-    setDraft({ question: q.question, options: [...q.options], correctIndex: q.correctIndex, explanation: q.explanation });
+    setDraft({ question: q.question, options: [...q.options], correctIndex: q.correctIndex, explanation: q.explanation, imageUrls: q.imageUrls || [] });
     setEditing(true);
   }
 
@@ -630,12 +698,58 @@ function EditableQuestionCard({ q, onApprove, onReject, onDelete, onSaveEdit }) 
     if (ok) setEditing(false);
   }
 
+  async function generateDiagram() {
+    setGenLoading(true);
+    setGenError(null);
+    setGenSvg(null);
+    try {
+      const svg = await onGenerateDiagram(q.topic, draft.question);
+      setGenSvg(svg);
+    } catch (e) {
+      setGenError("Couldn't generate a diagram. Try again.");
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  async function useGeneratedDiagram() {
+    try {
+      const blob = new Blob([genSvg], { type: "image/svg+xml" });
+      const file = new File([blob], `diagram-${Date.now()}.svg`, { type: "image/svg+xml" });
+      const url = await uploadQuestionImage(file);
+      setDraft((d) => ({ ...d, imageUrls: [...(d.imageUrls || []), url] }));
+      setGenSvg(null);
+    } catch (e) {
+      setGenError("Couldn't save that diagram. Try again.");
+    }
+  }
+
   if (editing) {
     return (
       <div className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
         <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic} · editing</div>
         <textarea value={draft.question} onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
           className="w-full mb-3 px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+        <ImageUploader images={draft.imageUrls} onChange={(imgs) => setDraft((d) => ({ ...d, imageUrls: imgs }))} disabled={saving} />
+        {onGenerateDiagram && (
+          <div className="mb-3">
+            <button type="button" onClick={generateDiagram} disabled={genLoading} className="pt-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-none border disabled:opacity-60" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              {genLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />}
+              {genLoading ? "Drawing…" : "Generate diagram (AI)"}
+            </button>
+            {genError && <div className="text-xs mt-1" style={{ color: RED }}>{genError}</div>}
+            {genSvg && (
+              <div className="mt-2 p-2 border" style={{ borderColor: AMBER, background: PAPER_2 }}>
+                <img src={svgToDataUrl(genSvg)} alt="Generated diagram preview" className="max-h-48 border mb-2" style={{ borderColor: STEEL }} />
+                <div className="flex gap-2 flex-wrap">
+                  <button type="button" onClick={useGeneratedDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Use this image</button>
+                  <button type="button" onClick={generateDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Regenerate</button>
+                  <button type="button" onClick={() => setGenSvg(null)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Discard</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid gap-2 mb-3">
           {draft.options.map((opt, oi) => (
             <div key={oi} className="flex items-center gap-2">
@@ -665,6 +779,11 @@ function EditableQuestionCard({ q, onApprove, onReject, onDelete, onSaveEdit }) 
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[10px] uppercase tracking-widest" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
       </div>
+      {q.imageUrls && q.imageUrls.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {q.imageUrls.map((url) => (<img key={url} src={url} alt="" className="max-h-48 border" style={{ borderColor: STEEL, background: PAPER_2 }} />))}
+        </div>
+      )}
       <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.question}</div>
       <div className="grid gap-1 mb-3">
         {q.options.map((opt, oi) => (
@@ -674,11 +793,17 @@ function EditableQuestionCard({ q, onApprove, onReject, onDelete, onSaveEdit }) 
         ))}
       </div>
       <div className="text-xs mb-3" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.explanation}</div>
-      <textarea placeholder="Reason for rejection (optional)" value={note} onChange={(e) => setNote(e.target.value)}
-        className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+      {variant === "pending" && (
+        <textarea placeholder="Reason for rejection (optional)" value={note} onChange={(e) => setNote(e.target.value)}
+          className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
+      )}
       <div className="flex gap-2 flex-wrap">
-        <button onClick={() => onApprove(q.id)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: GREEN, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
-        <button onClick={() => onReject(q.id, note)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: RED, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}><XCircle className="w-3.5 h-3.5" /> Reject</button>
+        {variant === "pending" && (
+          <>
+            <button onClick={() => onApprove(q.id)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: GREEN, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
+            <button onClick={() => onReject(q.id, note)} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none" style={{ background: RED, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}><XCircle className="w-3.5 h-3.5" /> Reject</button>
+          </>
+        )}
         <button onClick={startEdit} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Edit</button>
         <button onClick={() => onDelete(q.id)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Delete</button>
       </div>
@@ -686,7 +811,7 @@ function EditableQuestionCard({ q, onApprove, onReject, onDelete, onSaveEdit }) 
   );
 }
 
-function BankList({ title, items, color, onDelete }) {
+function BankList({ title, items, color, onDelete, onSaveEdit, onGenerateDiagram }) {
   const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
@@ -697,9 +822,67 @@ function BankList({ title, items, color, onDelete }) {
       {open && (
         <div className="space-y-2">
           {items.map((q) => (
-            <div key={q.id} className="flex items-start justify-between gap-3 text-xs py-2" style={{ borderBottom: `1px solid ${STEEL}`, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-              <span>{q.question}</span>
-              <button onClick={() => onDelete(q.id)} className="shrink-0 px-2 py-1 border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Delete</button>
+            <EditableQuestionCard key={q.id} q={q} variant="bank" onDelete={onDelete} onSaveEdit={onSaveEdit} onGenerateDiagram={onGenerateDiagram} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Lets an admin upload a few original example diagrams per topic (SVG files
+// work best — Claude can read exact drawing conventions from vector source;
+// images work too, but only as loose visual style reference). These are shown
+// to the AI as style/format examples when it draws a new diagram — never copied.
+function DiagramSampleLibrary({ samples, onUpload, onDelete }) {
+  const [topic, setTopic] = useState(TOPICS[0]);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState(null);
+  const inputRef = useRef(null);
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      await onUpload(topic, file);
+    } catch (e2) {
+      setErr("Upload failed — has the diagram_samples table been set up yet?");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="mt-8 pt-6" style={{ borderTop: `1px solid ${STEEL}` }}>
+      <div className="text-[11px] uppercase tracking-widest mb-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
+        Diagram sample library ({samples.length})
+      </div>
+      <p className="text-xs mb-3" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        Upload a few original example diagrams per topic. These are used only as style references (line style, label conventions) when the AI draws a new diagram for a question — never copied directly.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <select value={topic} onChange={(e) => setTopic(e.target.value)} className="px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
+        </select>
+        <label className="pt-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-none border cursor-pointer" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Inbox className="w-3.5 h-3.5" />}
+          {uploading ? "Uploading…" : "Add sample"}
+          <input ref={inputRef} type="file" accept="image/*,.svg" onChange={handleFile} disabled={uploading} className="hidden" />
+        </label>
+      </div>
+      {err && <div className="text-xs mb-2" style={{ color: RED }}>{err}</div>}
+      {samples.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {samples.map((s) => (
+            <div key={s.id} className="relative">
+              <img src={s.imageUrl} alt="" className="h-16 w-auto border" style={{ borderColor: STEEL, background: PAPER_2 }} />
+              <div className="text-[9px] mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>{s.topic}</div>
+              <button type="button" onClick={() => onDelete(s.id)}
+                className="absolute -top-2 -right-2 rounded-full w-5 h-5 flex items-center justify-center text-[10px] leading-none"
+                style={{ background: RED, color: PAPER_2, border: "none", cursor: "pointer" }}>×</button>
             </div>
           ))}
         </div>
@@ -708,7 +891,7 @@ function BankList({ title, items, color, onDelete }) {
   );
 }
 
-function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveEdit, onExport }) {
+function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveEdit, onExport, diagramSamples, onAddDiagramSample, onDeleteDiagramSample, onGenerateDiagram }) {
   return (
     <Sheet sheetNo="2 of 4" title="Review Queue — Admin Approval">
       {!isAdmin && (
@@ -732,7 +915,7 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
       <div className="space-y-6">
         {bank.pending.map((q) =>
           isAdmin ? (
-            <EditableQuestionCard key={q.id} q={q} onApprove={onApprove} onReject={onReject} onDelete={onDelete} onSaveEdit={onSaveEdit} />
+            <EditableQuestionCard key={q.id} q={q} onApprove={onApprove} onReject={onReject} onDelete={onDelete} onSaveEdit={onSaveEdit} onGenerateDiagram={onGenerateDiagram} />
           ) : (
             <div key={q.id} className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
               <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</div>
@@ -743,8 +926,9 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
       </div>
       {isAdmin && (
         <>
-          <BankList title="Manage approved questions" items={bank.approved} color={GREEN} onDelete={onDelete} />
-          <BankList title="Manage rejected questions" items={bank.rejected} color={RED} onDelete={onDelete} />
+          <BankList title="Manage approved questions" items={bank.approved} color={GREEN} onDelete={onDelete} onSaveEdit={onSaveEdit} onGenerateDiagram={onGenerateDiagram} />
+          <BankList title="Manage rejected questions" items={bank.rejected} color={RED} onDelete={onDelete} onSaveEdit={onSaveEdit} onGenerateDiagram={onGenerateDiagram} />
+          <DiagramSampleLibrary samples={diagramSamples} onUpload={onAddDiagramSample} onDelete={onDeleteDiagramSample} />
         </>
       )}
     </Sheet>
@@ -895,6 +1079,7 @@ export default function App() {
   const [bankLoading, setBankLoading] = useState(true);
   const [bankError, setBankError] = useState(null);
   const [progressLoaded, setProgressLoaded] = useState(false);
+  const [diagramSamples, setDiagramSamples] = useState([]);
 
   // Check for an existing session on load, and keep listening for sign-in/out.
   useEffect(() => {
@@ -946,6 +1131,7 @@ export default function App() {
         correctIndex: r.correct_index,
         explanation: r.explanation,
         note: r.reject_note || undefined,
+        imageUrls: r.image_urls || [],
       }));
       setBank({
         approved: shaped.filter((_, i) => data[i].status === "approved"),
@@ -966,6 +1152,63 @@ export default function App() {
     }
     loadBank();
   }, [session]);
+
+  // Load the diagram sample library (style-reference images admins upload per
+  // topic) — silently does nothing if the table doesn't exist yet, so this
+  // doesn't break the app for anyone who hasn't run the migration.
+  useEffect(() => {
+    if (!session) return;
+    supabase.from("diagram_samples").select("*").order("created_at", { ascending: true }).then(({ data, error }) => {
+      if (!error && data) {
+        setDiagramSamples(data.map((r) => ({ id: r.id, topic: r.topic, imageUrl: r.image_url, svgText: r.svg_text || null })));
+      }
+    });
+  }, [session]);
+
+  async function addDiagramSample(topic, file) {
+    let svgText = null;
+    if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
+      svgText = await file.text();
+    }
+    const url = await uploadQuestionImage(file);
+    const { data, error } = await supabase.from("diagram_samples").insert({ topic, image_url: url, svg_text: svgText }).select().single();
+    if (error) throw error;
+    setDiagramSamples((prev) => [...prev, { id: data.id, topic: data.topic, imageUrl: data.image_url, svgText: data.svg_text }]);
+  }
+
+  async function deleteDiagramSample(id) {
+    const { error } = await supabase.from("diagram_samples").delete().eq("id", id);
+    if (!error) setDiagramSamples((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  // Asks the backend to draw an original SVG diagram for a specific question,
+  // using up to 3 of that topic's sample diagrams as style references (SVG
+  // samples are sent as literal markup; raster samples as images for loose
+  // visual reference). Returns raw SVG markup, or throws on failure.
+  async function generateDiagramForQuestion(topic, questionText) {
+    const samplesForTopic = diagramSamples.filter((s) => s.topic === topic).slice(0, 3);
+    const samplesPayload = [];
+    for (const s of samplesForTopic) {
+      if (s.svgText) {
+        samplesPayload.push({ label: s.topic, svgText: s.svgText });
+      } else {
+        try {
+          const resp = await fetch(s.imageUrl);
+          const blob = await resp.blob();
+          const base64 = await blobToBase64(blob);
+          samplesPayload.push({ label: s.topic, base64, mediaType: blob.type || "image/png" });
+        } catch (e) { /* skip this sample if it can't be fetched */ }
+      }
+    }
+    const response = await fetch("/api/generate-diagram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, questionText, samples: samplesPayload }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || "Diagram generation failed");
+    return data.svg;
+  }
 
   // Once both the bank and the session are ready, load THIS account's saved
   // progress from Supabase — not the browser. This is what makes progress
@@ -1099,7 +1342,7 @@ export default function App() {
     }
     const shaped = data.map((r) => ({
       id: r.id, topic: r.topic, question: r.question, options: r.options,
-      correctIndex: r.correct_index, explanation: r.explanation,
+      correctIndex: r.correct_index, explanation: r.explanation, imageUrls: r.image_urls || [],
     }));
     setBank((b) => ({ ...b, pending: [...b.pending, ...shaped] }));
   }
@@ -1146,13 +1389,17 @@ export default function App() {
   async function saveEdit(id, edits) {
     const { error } = await supabase
       .from("questions")
-      .update({ question: edits.question, options: edits.options, correct_index: edits.correctIndex, explanation: edits.explanation })
+      .update({ question: edits.question, options: edits.options, correct_index: edits.correctIndex, explanation: edits.explanation, image_urls: edits.imageUrls || [] })
       .eq("id", id);
     if (error) {
       setBankError("Couldn't save your edits. Try again.");
       return false;
     }
-    setBank((b) => ({ ...b, pending: b.pending.map((q) => (q.id === id ? { ...q, ...edits } : q)) }));
+    setBank((b) => ({
+      approved: b.approved.map((q) => (q.id === id ? { ...q, ...edits } : q)),
+      pending: b.pending.map((q) => (q.id === id ? { ...q, ...edits } : q)),
+      rejected: b.rejected.map((q) => (q.id === id ? { ...q, ...edits } : q)),
+    }));
     return true;
   }
 
@@ -1254,7 +1501,7 @@ export default function App() {
         ) : (
           <>
             {view === "practice" && <PracticeView key={homeKey} bank={bank} missed={missed} you={you} questionStats={questionStats} isAdmin={profile?.role === "admin"} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
-            {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} />}
+            {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} diagramSamples={diagramSamples} onAddDiagramSample={addDiagramSample} onDeleteDiagramSample={deleteDiagramSample} onGenerateDiagram={generateDiagramForQuestion} />}
             {view === "dashboard" && (profile?.role === "admin" || profile?.role === "manager") && <DashboardView team={team} bank={bank} missed={missed} />}
           </>
         )}
