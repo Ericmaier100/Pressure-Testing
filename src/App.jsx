@@ -1654,37 +1654,41 @@ export default function App() {
         .pt-btn.selected { border-color: ${AMBER}; color: ${AMBER}; }
         .pt-btn:disabled { pointer-events: none; }
       `}</style>
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-end justify-between mb-1 flex-wrap gap-3">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex items-start justify-between mb-1 flex-wrap gap-4">
           <div className="border px-4 py-2" style={{ borderColor: INK, background: PAPER_2 }}>
             <h1 className="text-3xl" style={{ color: LINE, fontFamily: "'Space Grotesk', sans-serif" }}>PRESSURE TESTING</h1>
             <div className="text-[10px] tracking-[0.15em] uppercase mt-0.5" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>PE Civil · Structural</div>
           </div>
-          <div className="flex gap-1 flex-wrap items-center">
-            {[
-              ["practice", "Practice"],
-              ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []),
-              ...(profile?.role === "admin" || profile?.role === "manager" ? [["dashboard", "Manager view"]] : []),
-            ].map(([key, label]) => (
-              <button key={key} onClick={() => setView(key)} className={`pt-btn relative px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5 ${view === key ? "selected" : ""}`}
-                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                {view === key && <CornerTicks variant="two" />}
-                {key === "review" && bank.pending.length > 0 && (
-                  <span className="inline-flex items-center justify-center rounded-full text-[9px] w-4 h-4" style={{ background: AMBER, color: INK }}>{bank.pending.length}</span>
-                )}
-                {label}
-              </button>
-            ))}
-            <div className="text-[10px] ml-2 text-right leading-tight" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              <div style={{ color: STEEL }}>{session.user.email}</div>
-              {profile?.role && profile.role !== "member" && (
-                <div style={{ color: profile.role === "admin" ? RED : STEEL }}>{profile.role}</div>
-              )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex gap-1 flex-wrap items-center">
+              {[
+                ["practice", "Practice"],
+                ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []),
+                ...(profile?.role === "admin" || profile?.role === "manager" ? [["dashboard", "Manager view"]] : []),
+              ].map(([key, label]) => (
+                <button key={key} onClick={() => setView(key)} className={`pt-btn relative px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5 ${view === key ? "selected" : ""}`}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {view === key && <CornerTicks variant="two" />}
+                  {key === "review" && bank.pending.length > 0 && (
+                    <span className="inline-flex items-center justify-center rounded-full text-[9px] w-4 h-4" style={{ background: AMBER, color: INK }}>{bank.pending.length}</span>
+                  )}
+                  {label}
+                </button>
+              ))}
             </div>
-            <button onClick={() => supabase.auth.signOut()} className="pt-btn px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
-              style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              Sign out
-            </button>
+            <div className="flex items-center gap-3 pl-3 ml-auto" style={{ borderLeft: `1px solid ${STEEL}` }}>
+              <div className="text-[10px] text-right leading-tight" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                <div style={{ color: STEEL }}>{session.user.email}</div>
+                {profile?.role && profile.role !== "member" && (
+                  <div style={{ color: profile.role === "admin" ? RED : STEEL }}>{profile.role}</div>
+                )}
+              </div>
+              <button onClick={() => supabase.auth.signOut()} className="pt-btn px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
         <button onClick={goHome} className="flex items-center gap-1.5 text-xs uppercase tracking-wide mb-4 mt-3" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>
