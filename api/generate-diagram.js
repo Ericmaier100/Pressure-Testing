@@ -67,6 +67,13 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      // Forward Anthropic's real status and message — otherwise a bad/missing
+      // API key, no credits, or a rate limit all look identical to the
+      // frontend as "the AI didn't return a usable diagram."
+      console.error("Anthropic API error:", response.status, data);
+      return res.status(response.status).json({ error: data.error?.message || `Anthropic API error (status ${response.status})` });
+    }
     const text = (data.content || []).map((b) => b.text || "").join("");
     const start = text.indexOf("<svg");
     const end = text.lastIndexOf("</svg>");
@@ -76,6 +83,7 @@ export default async function handler(req, res) {
     const svg = text.slice(start, end + "</svg>".length);
     res.status(200).json({ svg });
   } catch (e) {
-    res.status(500).json({ error: "Diagram generation failed." });
+    console.error("generate-diagram handler failed:", e);
+    res.status(500).json({ error: "Diagram generation failed — server couldn't reach Anthropic." });
   }
 }

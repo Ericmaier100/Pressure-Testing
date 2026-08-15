@@ -209,9 +209,19 @@ async function generateQuestions(topic, referenceQuestions = [], rejectionNotes 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ topic, examples, feedback }),
   });
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (e) {
+    throw new Error(`Server returned an unreadable response (status ${response.status}).`);
+  }
+  if (!response.ok || data.error) {
+    // Surfaces the real reason (bad/missing API key, no credits, rate limit,
+    // etc.) instead of a generic message that hides what actually went wrong.
+    throw new Error(data.error || `Server error (status ${response.status}).`);
+  }
   const textBlock = (data.content || []).find((b) => b.type === "text");
-  if (!textBlock) throw new Error("No response content");
+  if (!textBlock) throw new Error("The AI didn't return usable content. Try again.");
   const cleaned = textBlock.text.replace(/```json|```/g, "").trim();
   const parsed = JSON.parse(cleaned);
   return parsed.questions.map((q) => ({ ...q, id: nextId(), topic }));
@@ -412,7 +422,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
       onRequestGeneration(qs);
       setRequested(true);
     } catch (e) {
-      setError("Couldn't reach the AI generator right now. Try again.");
+      setError(e.message || "Couldn't reach the AI generator right now. Try again.");
     } finally {
       setLoading(false);
     }
@@ -1011,7 +1021,7 @@ function GenerateQuestionsControl({ bank, onRequestGeneration }) {
       await onRequestGeneration(qs);
       setDone(qs.length);
     } catch (e) {
-      setError("Couldn't reach the AI generator right now. Try again.");
+      setError(e.message || "Couldn't reach the AI generator right now. Try again.");
     } finally {
       setLoading(false);
     }

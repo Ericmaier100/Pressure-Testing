@@ -51,8 +51,16 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      // Forward Anthropic's real status and message instead of always saying 200 —
+      // otherwise a bad/missing API key, no credits, or a rate limit all look
+      // identical to the frontend as "no content came back."
+      console.error("Anthropic API error:", response.status, data);
+      return res.status(response.status).json({ error: data.error?.message || `Anthropic API error (status ${response.status})` });
+    }
     res.status(200).json(data);
   } catch (e) {
-    res.status(500).json({ error: "Generation failed" });
+    console.error("generate-questions handler failed:", e);
+    res.status(500).json({ error: "Generation failed — server couldn't reach Anthropic." });
   }
 }
