@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from "recharts";
 import { Loader2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Users, ClipboardList, Inbox, Timer, RotateCcw, Target, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabaseClient";
@@ -12,30 +12,27 @@ const TOPICS = [
 ];
 
 // Warm "drafting vellum" palette — cream/tan paper tones instead of dark blueprint
-const PAPER = "#F3F6F7";    // card/panel background — soft, muted blue-gray, not bright white
-const PAPER_2 = "#FAFCFC";  // sheet/panel/card background — gentle off-white
-const CANVAS = "#16303F";   // outer page canvas — dark blueprint navy; cards stay light on top of it
-const CANVAS_GRID = "rgba(255,255,255,0.07)"; // ruled grid lines etched into the blueprint canvas
-const INK = "#3A4750";      // primary text and outlines — softened slate, not near-black
+// Warm sage/moss palette — deliberately avoiding the dark-navy-plus-orange
+// combination, since that reads as a generic "AI made this" look. Light sage
+// page, cream cards, near-black text, moss-green accent.
+const PAPER = "#F1EEE0";    // card/panel background — warm cream, not bright white
+const PAPER_2 = "#F7F5EC";  // sheet/panel/card background — slightly lighter cream
+const CANVAS = "#A9B896";   // outer page canvas — darkened sage green (no dark canvas this time)
+const CANVAS_GRID = "rgba(0,0,0,0.06)"; // ruled grid lines etched into the sage canvas
+const INK = "#1E1E1B";      // primary text and outlines — near-black, not tinted
 const LINE = INK;           // kept as an alias so no text ends up unreadable
-const STEEL = "#8398A6";    // secondary text — soft muted blue-gray
-const AMBER = "#C79552";    // accent — muted, desaturated amber
+const STEEL = "#6B6B5F";    // secondary text — warm muted gray, not blue-gray
+const ACCENT = "#4B6A43";   // accent — moss green (replaces the old amber)
 const RED = "#B5514A";      // incorrect / weak — softened terracotta
-const GREEN = "#4F8058";    // correct / strong — muted sage green
+const GREEN = "#2E7D5B";    // correct / strong — cooler forest-teal green, kept
+                             // visually distinct from ACCENT's warmer olive-moss
+                             // so "correct answer" and "brand accent" don't blur together
 
 let idCounter = 300;
 function nextId() {
   idCounter += 1;
   return `q${idCounter}`;
 }
-
-const SEED_TEAM = [
-  { id: "e1", name: "R. Alvarez", role: "EIT, Structural", readiness: 78, topics: { "Structural Analysis (Loads & Load Effects)": 82, "Reinforced Concrete Design": 74, "Steel Design": 80, "Foundations & Geotechnical": 65, "Lateral Systems (Wind & Seismic)": 88 } },
-  { id: "e2", name: "M. Okafor", role: "EIT, Structural", readiness: 61, topics: { "Structural Analysis (Loads & Load Effects)": 70, "Reinforced Concrete Design": 55, "Steel Design": 58, "Foundations & Geotechnical": 60, "Lateral Systems (Wind & Seismic)": 62 } },
-  { id: "e3", name: "J. Park", role: "EIT, Structural", readiness: 85, topics: { "Structural Analysis (Loads & Load Effects)": 88, "Reinforced Concrete Design": 84, "Steel Design": 90, "Foundations & Geotechnical": 79, "Lateral Systems (Wind & Seismic)": 83 } },
-  { id: "e4", name: "S. Whitfield", role: "EIT, Structural", readiness: 54, topics: { "Structural Analysis (Loads & Load Effects)": 62, "Reinforced Concrete Design": 48, "Steel Design": 51, "Foundations & Geotechnical": 45, "Lateral Systems (Wind & Seismic)": 65 } },
-  { id: "e5", name: "D. Nasser", role: "EIT, Structural", readiness: 71, topics: { "Structural Analysis (Loads & Load Effects)": 75, "Reinforced Concrete Design": 68, "Steel Design": 72, "Foundations & Geotechnical": 66, "Lateral Systems (Wind & Seismic)": 74 } },
-];
 
 const SEED_BANK = {
   // Nothing starts pre-approved — every question waits in the Review Queue until you personally approve it.
@@ -110,7 +107,7 @@ function targetScoreForAccuracy(accuracy) {
 
 function scoreColor(v) {
   if (v >= 75) return GREEN;
-  if (v >= 60) return AMBER;
+  if (v >= 60) return ACCENT;
   return RED;
 }
 
@@ -172,7 +169,7 @@ function CornerTicks({ variant = "all" }) {
     ? ["top-0 left-0 border-t-2 border-l-2", "top-0 right-0 border-t-2 border-r-2", "bottom-0 left-0 border-b-2 border-l-2", "bottom-0 right-0 border-b-2 border-r-2"]
     : ["top-0 left-0 border-t-2 border-l-2", "bottom-0 right-0 border-b-2 border-r-2"];
   return marks.map((pos, i) => (
-    <span key={i} className={`pointer-events-none absolute ${pos} w-2.5 h-2.5`} style={{ borderColor: AMBER }} />
+    <span key={i} className={`pointer-events-none absolute ${pos} w-2.5 h-2.5`} style={{ borderColor: ACCENT }} />
   ));
 }
 
@@ -261,8 +258,8 @@ function QuizRunner({ quiz, submitted, answers, onAnswer, onSubmit, allAnswered 
                     <button key={oi} disabled={submitted} onClick={() => onAnswer(i, oi)}
                       className="text-left px-3 py-2 text-sm flex items-center gap-2 rounded-none border transition"
                       style={{
-                        borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? AMBER : STEEL,
-                        background: showCorrect ? GREEN : showWrongPick ? RED : isSelected && !submitted ? "rgba(199,149,82,0.15)" : "transparent",
+                        borderColor: showCorrect ? GREEN : showWrongPick ? RED : isSelected ? ACCENT : STEEL,
+                        background: showCorrect ? GREEN : showWrongPick ? RED : isSelected && !submitted ? "rgba(75,106,67,0.15)" : "transparent",
                         color: showCorrect || showWrongPick ? PAPER_2 : LINE,
                         fontFamily: "'IBM Plex Sans', sans-serif",
                       }}>
@@ -453,13 +450,13 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
     return (
       <Sheet sheetNo="1 of 4" title="Practice">
         {!baselineComplete && (
-          <div className="mb-6 p-4 border" style={{ borderColor: AMBER }}>
-            <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>Recommended first step</div>
+          <div className="mb-6 p-4 border" style={{ borderColor: ACCENT }}>
+            <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>Recommended first step</div>
             <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
               Take a {BASELINE_TARGET}-question baseline test across every topic. It's what unlocks Adaptive practice — {questionsUntilBaseline} question{questionsUntilBaseline === 1 ? "" : "s"} to go{attemptsSoFar > 0 ? " (any practice you've already done counts toward this)" : ""}.
             </div>
             {canRunBaseline ? (
-              <button onClick={() => openMode("baseline")} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              <button onClick={() => openMode("baseline")} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
                 <Target className="w-4 h-4" /> Start baseline test
               </button>
             ) : (
@@ -474,7 +471,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
             disabled={!baselineComplete}
             className="pt-btn text-left p-4 border rounded-none disabled:opacity-40"
           >
-            <Target className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+            <Target className="w-4 h-4 mb-2" style={{ color: ACCENT }} />
             <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Adaptive</div>
             <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
               Shows you questions based on your weakest topics. Continuously assesses your weak topics based on practice question performance.
@@ -483,20 +480,20 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
           </button>
 
           <button onClick={() => openMode("timed")} className="pt-btn text-left p-4 border rounded-none">
-            <Timer className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+            <Timer className="w-4 h-4 mb-2" style={{ color: ACCENT }} />
             <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Timed random exam</div>
             <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>A {Math.min(10, totalApproved)}-question mock exam, ~2 min/question, pulled at random across every topic.</div>
           </button>
 
           <button onClick={() => openMode("quick")} className="pt-btn text-left p-4 border rounded-none">
-            <RefreshCw className="w-4 h-4 mb-2" style={{ color: AMBER }} />
+            <RefreshCw className="w-4 h-4 mb-2" style={{ color: ACCENT }} />
             <div className="text-sm font-semibold mb-1" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>Specific review</div>
             <div className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Pick a topic yourself and go at your own pace.</div>
           </button>
         </div>
 
         {missed.length > 0 && (
-          <div className="mt-5 text-[11px]" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="mt-5 text-[11px]" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>
             {missed.length} question{missed.length === 1 ? "" : "s"} in your review queue — retry them from Specific review.
           </div>
         )}
@@ -512,7 +509,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
 
       {mode === "adaptive" && (
         <div className="mb-6">
-          <button onClick={startAdaptive} disabled={eligibleTopics.length === 0} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          <button onClick={startAdaptive} disabled={eligibleTopics.length === 0} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
             <Target className="w-4 h-4" />{quiz ? "New adaptive set" : "Start adaptive practice"}
           </button>
           <p className="text-xs mt-2" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
@@ -528,11 +525,11 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
             {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
           </select>
           {hasEnough ? (
-            <button onClick={startQuick} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            <button onClick={startQuick} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
               <RefreshCw className="w-4 h-4" />{quiz ? "New set from bank" : "Start practice set"}
             </button>
           ) : (
-            <button onClick={requestMore} disabled={loading || requested} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            <button onClick={requestMore} disabled={loading || requested} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-60" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Inbox className="w-4 h-4" />}
               {loading ? "Sending to review…" : requested ? "Sent for review" : "Request questions for review"}
             </button>
@@ -542,7 +539,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
 
       {mode === "timed" && (
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <button onClick={startTimed} disabled={!canRunExam} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          <button onClick={startTimed} disabled={!canRunExam} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
             <Timer className="w-4 h-4" />{quiz ? "New mock exam" : `Start ${Math.min(10, totalApproved)}-question mock exam`}
           </button>
           {!canRunExam && <span className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Need at least 6 approved questions across topics to run a mock exam.</span>}
@@ -556,7 +553,7 @@ function PracticeView({ bank, missed, you, questionStats, isAdmin, onRequestGene
 
       {mode === "baseline" && (
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <button onClick={startBaseline} disabled={!canRunBaseline} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          <button onClick={startBaseline} disabled={!canRunBaseline} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-40" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
             <Target className="w-4 h-4" />{quiz ? "New baseline test" : `Start ${BASELINE_TARGET}-question baseline test`}
           </button>
           {!canRunBaseline && <span className="text-xs" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>Need at least 10 approved questions in the bank first.</span>}
@@ -737,7 +734,7 @@ function EditableQuestionCard({ q, variant = "pending", onApprove, onReject, onD
   if (editing) {
     return (
       <div className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
-        <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic} · editing</div>
+        <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic} · editing</div>
         <textarea value={draft.question} onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
           className="w-full mb-3 px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
         <ImageUploader images={draft.imageUrls} onChange={(imgs) => setDraft((d) => ({ ...d, imageUrls: imgs }))} disabled={saving} />
@@ -749,10 +746,10 @@ function EditableQuestionCard({ q, variant = "pending", onApprove, onReject, onD
             </button>
             {genError && <div className="text-xs mt-1" style={{ color: RED }}>{genError}</div>}
             {genSvg && (
-              <div className="mt-2 p-2 border" style={{ borderColor: AMBER, background: PAPER_2 }}>
+              <div className="mt-2 p-2 border" style={{ borderColor: ACCENT, background: PAPER_2 }}>
                 <img src={svgToDataUrl(genSvg)} alt="Generated diagram preview" className="max-h-48 border mb-2" style={{ borderColor: STEEL }} />
                 <div className="flex gap-2 flex-wrap">
-                  <button type="button" onClick={useGeneratedDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Use this image</button>
+                  <button type="button" onClick={useGeneratedDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Use this image</button>
                   <button type="button" onClick={generateDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Regenerate</button>
                   <button type="button" onClick={() => setGenSvg(null)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Discard</button>
                 </div>
@@ -773,7 +770,7 @@ function EditableQuestionCard({ q, variant = "pending", onApprove, onReject, onD
         <textarea value={draft.explanation} onChange={(e) => setDraft((d) => ({ ...d, explanation: e.target.value }))}
           className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
         <div className="flex gap-2">
-          <button onClick={save} disabled={saving} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          <button onClick={save} disabled={saving} className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 rounded-none disabled:opacity-60" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
             {saving ? "Saving…" : "Save changes"}
           </button>
           <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
@@ -787,7 +784,7 @@ function EditableQuestionCard({ q, variant = "pending", onApprove, onReject, onD
   return (
     <div className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] uppercase tracking-widest" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
+        <span className="text-[10px] uppercase tracking-widest" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</span>
       </div>
       {q.imageUrls && q.imageUrls.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-3">
@@ -953,8 +950,8 @@ function NewQuestionForm({ onSave, onCancel, onGenerateDiagram }) {
   }
 
   return (
-    <div className="mb-8 p-4 border" style={{ borderColor: AMBER, background: PAPER_2 }}>
-      <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>New question</div>
+    <div className="mb-8 p-4 border" style={{ borderColor: ACCENT, background: PAPER_2 }}>
+      <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>New question</div>
       <select value={draft.topic} onChange={(e) => setDraft((d) => ({ ...d, topic: e.target.value }))}
         className="mb-3 px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
         {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
@@ -970,10 +967,10 @@ function NewQuestionForm({ onSave, onCancel, onGenerateDiagram }) {
           </button>
           {genError && <div className="text-xs mt-1" style={{ color: RED }}>{genError}</div>}
           {genSvg && (
-            <div className="mt-2 p-2 border" style={{ borderColor: AMBER, background: PAPER }}>
+            <div className="mt-2 p-2 border" style={{ borderColor: ACCENT, background: PAPER }}>
               <img src={svgToDataUrl(genSvg)} alt="Generated diagram preview" className="max-h-48 border mb-2" style={{ borderColor: STEEL }} />
               <div className="flex gap-2 flex-wrap">
-                <button type="button" onClick={useGeneratedDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Use this image</button>
+                <button type="button" onClick={useGeneratedDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Use this image</button>
                 <button type="button" onClick={generateDiagram} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Regenerate</button>
                 <button type="button" onClick={() => setGenSvg(null)} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Discard</button>
               </div>
@@ -994,7 +991,7 @@ function NewQuestionForm({ onSave, onCancel, onGenerateDiagram }) {
         className="w-full mb-3 px-3 py-2 text-xs bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} rows={2} />
       {err && <div className="text-xs mb-2" style={{ color: RED }}>{err}</div>}
       <div className="flex gap-2">
-        <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-xs font-semibold rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>{saving ? "Saving…" : "Save question"}</button>
+        <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-xs font-semibold rounded-none disabled:opacity-60" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>{saving ? "Saving…" : "Save question"}</button>
         <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Cancel</button>
       </div>
     </div>
@@ -1035,7 +1032,7 @@ function GenerateQuestionsControl({ bank, onRequestGeneration }) {
           className="px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>
           {TOPICS.map((t) => (<option key={t} value={t} style={{ background: PAPER }}>{t}</option>))}
         </select>
-        <button onClick={generate} disabled={loading} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-60" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        <button onClick={generate} disabled={loading} className="px-4 py-2 text-sm font-semibold flex items-center gap-2 rounded-none disabled:opacity-60" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Inbox className="w-4 h-4" />}
           {loading ? "Generating…" : "Generate 4 questions"}
         </button>
@@ -1058,14 +1055,14 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
       {isAdmin && <GenerateQuestionsControl bank={bank} onRequestGeneration={onRequestGeneration} />}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div className="flex flex-wrap gap-8">
-          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Pending</div><div className="text-2xl font-semibold" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.pending.length}</div></div>
+          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Pending</div><div className="text-2xl font-semibold" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.pending.length}</div></div>
           <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Approved bank</div><div className="text-2xl font-semibold" style={{ color: GREEN, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.approved.length}</div></div>
           <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Rejected</div><div className="text-2xl font-semibold" style={{ color: RED, fontFamily: "'IBM Plex Mono', monospace" }}>{bank.rejected.length}</div></div>
         </div>
         {isAdmin && (
           <div className="flex gap-2">
             {!showNewForm && (
-              <button onClick={() => setShowNewForm(true)} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              <button onClick={() => setShowNewForm(true)} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
                 + Add new question
               </button>
             )}
@@ -1093,7 +1090,7 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
             <EditableQuestionCard key={q.id} q={q} onApprove={onApprove} onReject={onReject} onDelete={onDelete} onSaveEdit={onSaveEdit} onGenerateDiagram={onGenerateDiagram} />
           ) : (
             <div key={q.id} className="pb-5" style={{ borderBottom: `1px solid ${STEEL}` }}>
-              <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</div>
+              <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>{q.topic}</div>
               <div className="text-sm mb-3" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{q.question}</div>
             </div>
           )
@@ -1110,52 +1107,147 @@ function ReviewQueueView({ bank, isAdmin, onApprove, onReject, onDelete, onSaveE
   );
 }
 
-function DashboardView({ team, bank, missed }) {
-  const topicAverages = useMemo(() => TOPICS.map((t) => {
-    const vals = team.map((e) => topicPct(e.topics[t])).filter((v) => v !== undefined);
+function TeamView({ session, myTeam, teamLoading, teamRoster, rosterLoading, inviteLink, teamError, joinStatus, bank, missed, onCreateTeam, onGenerateInvite, onToggleAdmin, onLeaveTeam }) {
+  const [nameInput, setNameInput] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  async function handleCreate() {
+    if (!nameInput.trim()) return;
+    setCreating(true);
+    await onCreateTeam(nameInput.trim());
+    setCreating(false);
+  }
+
+  const joinBanner = joinStatus && (
+    <div className="mb-6 p-3 border text-sm flex items-center gap-2" style={{
+      borderColor: joinStatus.status === "error" ? RED : joinStatus.status === "success" ? GREEN : STEEL,
+      color: joinStatus.status === "error" ? RED : joinStatus.status === "success" ? GREEN : STEEL,
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    }}>
+      {joinStatus.status === "redeeming" && <Loader2 className="w-4 h-4 animate-spin" />}
+      {joinStatus.status === "success" && <CheckCircle2 className="w-4 h-4" />}
+      {joinStatus.status === "error" && <XCircle className="w-4 h-4" />}
+      {joinStatus.message}
+    </div>
+  );
+
+  if (teamLoading) {
+    return <Sheet sheetNo="3 of 4" title="Team"><Loader2 className="w-5 h-5 animate-spin" style={{ color: STEEL }} /></Sheet>;
+  }
+
+  // Not on a team yet — create one, or wait for an invite link to be redeemed.
+  if (!myTeam) {
+    return (
+      <Sheet sheetNo="3 of 4" title="Team">
+        {joinBanner}
+        <p className="text-sm mb-4" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          You're not on a team yet. Create one to get invite links you can send your engineers, or open an invite link someone sent you to join theirs.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} placeholder="Team or firm name"
+            className="px-3 py-2 text-sm bg-transparent border rounded-none" style={{ borderColor: STEEL, color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }} />
+          <button onClick={handleCreate} disabled={creating || !nameInput.trim()} className="px-4 py-2 text-sm font-semibold rounded-none disabled:opacity-60" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            {creating ? "Creating…" : "Create team"}
+          </button>
+        </div>
+        {teamError && <div className="text-xs mt-2" style={{ color: RED }}>{teamError}</div>}
+      </Sheet>
+    );
+  }
+
+  // On a team, but not a team admin — personal stats only, no roster access.
+  if (!myTeam.isTeamAdmin) {
+    const you = teamRoster.find((m) => m.userId === session.user.id);
+    const topicData = TOPICS.map((t) => ({ topic: t.split(" (")[0], value: topicPct(you?.topics?.[t]) ?? 0 }));
+    return (
+      <Sheet sheetNo="3 of 4" title="Team">
+        {joinBanner}
+        <div className="mb-4 text-sm" style={{ color: STEEL, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+          You're on <span style={{ color: LINE, fontWeight: 600 }}>{myTeam.name}</span>. Only team admins can see the whole team's stats — here's your own.
+        </div>
+        <div className="mb-6">
+          <div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Your readiness</div>
+          <div className="text-3xl font-semibold" style={{ color: scoreColor(you?.readiness || 0), fontFamily: "'IBM Plex Mono', monospace" }}>{you?.readiness || 0}%</div>
+        </div>
+        <div className="space-y-3 mb-6">
+          {topicData.map((d) => (
+            <div key={d.topic} className="flex items-center gap-3">
+              <div className="w-40 shrink-0 text-xs" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{d.topic}</div>
+              <div className="flex-1"><DimensionBar label="" value={d.value} /></div>
+            </div>
+          ))}
+        </div>
+        <button onClick={onLeaveTeam} className="text-xs underline" style={{ color: STEEL, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif" }}>Leave this team</button>
+      </Sheet>
+    );
+  }
+
+  // Team admin — full roster dashboard, real data (no more mock roster).
+  const topicAverages = TOPICS.map((t) => {
+    const vals = teamRoster.map((m) => topicPct(m.topics[t])).filter((v) => v !== undefined);
     const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
     const approvedCount = bank.approved.filter((q) => q.topic === t).length;
     return { topic: t.split(" (")[0], value: avg, approvedCount };
-  }), [team, bank]);
-
-  const weakest = [...topicAverages].sort((a, b) => a.value - b.value)[0];
-  const teamAvgReadiness = Math.round(team.reduce((a, e) => a + e.readiness, 0) / team.length);
+  });
+  const weakest = topicAverages.length ? [...topicAverages].sort((a, b) => a.value - b.value)[0] : null;
+  const teamAvgReadiness = teamRoster.length ? Math.round(teamRoster.reduce((a, m) => a + m.readiness, 0) / teamRoster.length) : 0;
 
   return (
     <div className="space-y-6">
-      <div className="text-xs px-3 py-2 border" style={{ borderColor: AMBER, color: AMBER, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-        Sample data for demo purposes — the team roster below (R. Alvarez, M. Okafor, etc.) is illustrative, not real employees. Your own real practice results still show up here alongside it.
-      </div>
-      <Sheet sheetNo="3 of 4" title="Manager Dashboard — Team Readiness">
-        <div className="flex flex-wrap gap-8 mb-6">
-          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Team avg. readiness</div><div className="text-3xl font-semibold" style={{ color: scoreColor(teamAvgReadiness), fontFamily: "'IBM Plex Mono', monospace" }}>{teamAvgReadiness}%</div></div>
-          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Licensed seats</div><div className="text-3xl font-semibold" style={{ color: LINE, fontFamily: "'IBM Plex Mono', monospace" }}>{team.length}</div></div>
-          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Weakest topic, org-wide</div><div className="text-lg font-semibold" style={{ color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>{weakest.topic}</div></div>
-          <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Your review queue</div><div className="text-3xl font-semibold" style={{ color: AMBER, fontFamily: "'IBM Plex Mono', monospace" }}>{missed.length}</div></div>
+      {joinBanner}
+      <Sheet sheetNo="3 of 4" title={`Team Dashboard — ${myTeam.name}`}>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div className="flex flex-wrap gap-8">
+            <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Team avg. readiness</div><div className="text-3xl font-semibold" style={{ color: scoreColor(teamAvgReadiness), fontFamily: "'IBM Plex Mono', monospace" }}>{teamAvgReadiness}%</div></div>
+            <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Team members</div><div className="text-3xl font-semibold" style={{ color: LINE, fontFamily: "'IBM Plex Mono', monospace" }}>{teamRoster.length}</div></div>
+            {weakest && <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Weakest topic, team-wide</div><div className="text-lg font-semibold" style={{ color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>{weakest.topic}</div></div>}
+            <div><div className="text-[10px] uppercase tracking-widest" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>Your review queue</div><div className="text-3xl font-semibold" style={{ color: ACCENT, fontFamily: "'IBM Plex Mono', monospace" }}>{missed.length}</div></div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onGenerateInvite} className="px-3 py-1.5 text-xs font-semibold rounded-none" style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>Invite someone</button>
+            <button onClick={onLeaveTeam} className="px-3 py-1.5 text-xs font-semibold rounded-none border" style={{ borderColor: RED, color: RED, fontFamily: "'IBM Plex Sans', sans-serif" }}>Leave team</button>
+          </div>
         </div>
-        <div className="mb-2 text-[11px] uppercase tracking-widest flex items-center gap-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}><ClipboardList className="w-3.5 h-3.5" /> Topic performance, team average</div>
-        <div style={{ height: 220 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={topicAverages} margin={{ top: 8, right: 8, left: -20, bottom: 40 }}>
-              <CartesianGrid stroke={STEEL} strokeOpacity={0.2} vertical={false} />
-              <XAxis dataKey="topic" tick={{ fill: STEEL, fontSize: 10 }} angle={-20} textAnchor="end" interval={0} />
-              <YAxis domain={[0, 100]} tick={{ fill: STEEL, fontSize: 10 }} />
-              <Tooltip contentStyle={{ background: PAPER_2, border: `1px solid ${STEEL}`, fontFamily: "IBM Plex Sans" }} labelStyle={{ color: INK }} />
-              <Bar dataKey="value" radius={[2, 2, 0, 0]}>{topicAverages.map((d, i) => (<Cell key={i} fill={scoreColor(d.value)} />))}</Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px]" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
-          {topicAverages.map((d) => (<span key={d.topic}>{d.topic}: {d.approvedCount} approved</span>))}
-        </div>
+        {inviteLink && (
+          <div className="mb-6 p-3 border text-xs break-all" style={{ borderColor: ACCENT, color: LINE, background: PAPER, fontFamily: "'IBM Plex Mono', monospace" }}>
+            One-time link — works once, for one person, then expires: {inviteLink}
+          </div>
+        )}
+        {teamError && <div className="text-xs mb-4" style={{ color: RED }}>{teamError}</div>}
+        {rosterLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin" style={{ color: STEEL }} />
+        ) : (
+          <>
+            <div className="mb-2 text-[11px] uppercase tracking-widest flex items-center gap-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}><ClipboardList className="w-3.5 h-3.5" /> Topic performance, team average</div>
+            <div style={{ height: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topicAverages} margin={{ top: 8, right: 8, left: -20, bottom: 40 }}>
+                  <CartesianGrid stroke={STEEL} strokeOpacity={0.2} vertical={false} />
+                  <XAxis dataKey="topic" tick={{ fill: STEEL, fontSize: 10 }} angle={-20} textAnchor="end" interval={0} />
+                  <YAxis domain={[0, 100]} tick={{ fill: STEEL, fontSize: 10 }} />
+                  <Tooltip contentStyle={{ background: PAPER_2, border: `1px solid ${STEEL}`, fontFamily: "IBM Plex Sans" }} labelStyle={{ color: INK }} />
+                  <Bar dataKey="value" radius={[2, 2, 0, 0]}>{topicAverages.map((d, i) => (<Cell key={i} fill={scoreColor(d.value)} />))}</Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px]" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}>
+              {topicAverages.map((d) => (<span key={d.topic}>{d.topic}: {d.approvedCount} approved</span>))}
+            </div>
+          </>
+        )}
       </Sheet>
-      <Sheet sheetNo="3A" title="Individual Readiness">
-        <div className="mb-4 text-[11px] uppercase tracking-widest flex items-center gap-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}><Users className="w-3.5 h-3.5" /> {team.length} engineers licensed on this account</div>
+      <Sheet sheetNo="3A" title="Team Roster">
+        <div className="mb-4 text-[11px] uppercase tracking-widest flex items-center gap-2" style={{ color: STEEL, fontFamily: "'IBM Plex Mono', monospace" }}><Users className="w-3.5 h-3.5" /> {teamRoster.length} people on this team</div>
         <div className="space-y-3">
-          {[...team].sort((a, b) => b.readiness - a.readiness).map((e) => (
-            <div key={e.id} className="flex items-center gap-3">
-              <div className="w-28 shrink-0 text-sm" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{e.name}</div>
-              <div className="flex-1"><DimensionBar label={e.role} value={e.readiness} /></div>
+          {[...teamRoster].sort((a, b) => b.readiness - a.readiness).map((m) => (
+            <div key={m.userId} className="flex items-center gap-3">
+              <div className="w-48 shrink-0 text-sm truncate" style={{ color: LINE, fontFamily: "'IBM Plex Sans', sans-serif" }}>{m.email}</div>
+              <div className="flex-1"><DimensionBar label={m.isTeamAdmin ? "Team admin" : "Member"} value={m.readiness} /></div>
+              {m.userId !== session.user.id && (
+                <button onClick={() => onToggleAdmin(m.userId, !m.isTeamAdmin)} className="shrink-0 px-2 py-1 text-[11px] border rounded-none" style={{ borderColor: STEEL, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                  {m.isTeamAdmin ? "Remove admin" : "Make admin"}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1220,7 +1312,7 @@ function AuthScreen({ onAuthed }) {
           {error && <div className="text-xs" style={{ color: RED }}>{error}</div>}
           {confirmMsg && <div className="text-xs" style={{ color: GREEN }}>{confirmMsg}</div>}
           <button type="submit" disabled={loading} className="w-full py-2 text-sm font-semibold rounded-none disabled:opacity-60"
-            style={{ background: AMBER, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            style={{ background: ACCENT, color: INK, fontFamily: "'IBM Plex Sans', sans-serif" }}>
             {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Sign up"}
           </button>
         </form>
@@ -1247,7 +1339,13 @@ export default function App() {
     setView("practice");
     setHomeKey((k) => k + 1);
   }
-  const [team, setTeam] = useState(SEED_TEAM);
+  // NOTE: this "team" array is unrelated to the teams/organizations feature
+  // below (myTeam, teamRoster, etc.) — it's an older mechanism that just holds
+  // a single "you" entry for tracking this account's own practice stats
+  // (used by Adaptive practice's weakest-topic logic). Kept as-is to avoid
+  // touching everywhere that reads it; the naming collision is unfortunate
+  // but harmless since they're never mixed together.
+  const [team, setTeam] = useState([]);
   const [bank, setBank] = useState({ approved: [], pending: [], rejected: [] });
   const [missed, setMissed] = useState([]);
   const [questionStats, setQuestionStats] = useState({});
@@ -1255,6 +1353,21 @@ export default function App() {
   const [bankError, setBankError] = useState(null);
   const [progressLoaded, setProgressLoaded] = useState(false);
   const [diagramSamples, setDiagramSamples] = useState([]);
+
+  // Real teams/organizations — replaces the old mock "Manager Dashboard" data.
+  // myTeam is null if the person isn't on a team yet. teamRoster is only ever
+  // populated for team admins (regular members can't fetch teammates' rows —
+  // enforced at the database level, not just hidden in the UI).
+  const [myTeam, setMyTeam] = useState(null);
+  const [teamLoading, setTeamLoading] = useState(true);
+  const [teamRoster, setTeamRoster] = useState([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [inviteLink, setInviteLink] = useState(null);
+  const [teamError, setTeamError] = useState(null);
+  // Captured once, from the URL, in case this page load is someone opening a
+  // one-time invite link (?invite=<token>).
+  const [pendingInviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite"));
+  const [joinStatus, setJoinStatus] = useState(null); // { status: 'redeeming'|'success'|'error', message }
 
   // Check for an existing session on load, and keep listening for sign-in/out.
   useEffect(() => {
@@ -1279,10 +1392,10 @@ export default function App() {
 
   // If someone's role doesn't permit the tab they're currently on (e.g. it changed,
   // or they landed on a hidden tab some other way), bounce back to Practice.
+  // (The Team tab has no such guard — every signed-in person can access it now.)
   useEffect(() => {
     if (!profile) return;
     if (view === "review" && profile.role !== "admin") setView("practice");
-    if (view === "dashboard" && profile.role !== "admin" && profile.role !== "manager") setView("practice");
   }, [profile, view]);
 
   // Load the real, permanent question bank from Supabase — but only once signed in,
@@ -1385,6 +1498,134 @@ export default function App() {
     return data.svg;
   }
 
+  // Loads which team (if any) this account belongs to, and whether they're a
+  // team admin there. Runs whenever the session is ready.
+  useEffect(() => {
+    if (!session) { setTeamLoading(false); return; }
+    let cancelled = false;
+    async function loadMyTeam() {
+      setTeamLoading(true);
+      const { data, error } = await supabase
+        .from("team_members")
+        .select("team_id, is_team_admin, teams(name)")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!error && data) {
+        setMyTeam({ id: data.team_id, name: data.teams?.name || "Your team", isTeamAdmin: data.is_team_admin });
+      } else {
+        setMyTeam(null);
+      }
+      setTeamLoading(false);
+    }
+    loadMyTeam();
+    return () => { cancelled = true; };
+  }, [session]);
+
+  // If this page load came from a one-time invite link, redeem it as soon as
+  // we're signed in and know the current team state. Joining a new team
+  // replaces any existing membership (delete-then-insert), matching "one team
+  // per person" — someone can switch teams by using a new invite.
+  useEffect(() => {
+    if (!session || !pendingInviteToken || teamLoading || joinStatus) return;
+    async function redeem() {
+      setJoinStatus({ status: "redeeming", message: "Joining team…" });
+      const { data: invite, error: findError } = await supabase
+        .from("team_invites")
+        .select("id, team_id, used_at")
+        .eq("id", pendingInviteToken)
+        .maybeSingle();
+      if (findError || !invite) {
+        setJoinStatus({ status: "error", message: "That invite link isn't valid." });
+        return;
+      }
+      if (invite.used_at) {
+        setJoinStatus({ status: "error", message: "That invite link has already been used. Ask your team admin for a new one." });
+        return;
+      }
+      // Leave any existing team first (a person belongs to at most one).
+      await supabase.from("team_members").delete().eq("user_id", session.user.id);
+      const { error: joinError } = await supabase
+        .from("team_members")
+        .insert({ team_id: invite.team_id, user_id: session.user.id, is_team_admin: false });
+      if (joinError) {
+        setJoinStatus({ status: "error", message: "Couldn't join that team. Try again." });
+        return;
+      }
+      await supabase.from("team_invites").update({ used_at: new Date().toISOString(), used_by: session.user.id }).eq("id", pendingInviteToken);
+      const { data: teamRow } = await supabase.from("teams").select("name").eq("id", invite.team_id).maybeSingle();
+      setMyTeam({ id: invite.team_id, name: teamRow?.name || "Your team", isTeamAdmin: false });
+      setJoinStatus({ status: "success", message: `You've joined ${teamRow?.name || "the team"}.` });
+      // Clean the token out of the URL so refreshing doesn't try to redeem it again.
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    redeem();
+  }, [session, pendingInviteToken, teamLoading, joinStatus]);
+
+  async function createTeam(name) {
+    setTeamError(null);
+    const { data: newTeam, error: teamErr } = await supabase.from("teams").insert({ name, created_by: session.user.id }).select().single();
+    if (teamErr) { setTeamError("Couldn't create the team. Try again."); return false; }
+    const { error: memberErr } = await supabase.from("team_members").insert({ team_id: newTeam.id, user_id: session.user.id, is_team_admin: true });
+    if (memberErr) { setTeamError("Team was created, but couldn't add you to it. Try again."); return false; }
+    setMyTeam({ id: newTeam.id, name: newTeam.name, isTeamAdmin: true });
+    return true;
+  }
+
+  async function leaveTeam() {
+    if (!myTeam) return;
+    await supabase.from("team_members").delete().eq("user_id", session.user.id);
+    setMyTeam(null);
+    setTeamRoster([]);
+    setInviteLink(null);
+  }
+
+  async function generateInvite() {
+    if (!myTeam) return;
+    setTeamError(null);
+    const { data, error } = await supabase.from("team_invites").insert({ team_id: myTeam.id, created_by: session.user.id }).select().single();
+    if (error) { setTeamError("Couldn't create an invite link. Try again."); return; }
+    setInviteLink(`${window.location.origin}${window.location.pathname}?invite=${data.id}`);
+  }
+
+  // Only ever called for team admins — RLS would return nothing useful to a
+  // regular member anyway, since they can't see teammates' rows.
+  async function loadTeamRoster() {
+    if (!myTeam?.isTeamAdmin) return;
+    setRosterLoading(true);
+    const { data: members, error } = await supabase.from("team_members").select("user_id, is_team_admin").eq("team_id", myTeam.id);
+    if (error || !members) { setRosterLoading(false); return; }
+    const ids = members.map((m) => m.user_id);
+    const [{ data: profilesData }, { data: progressData }] = await Promise.all([
+      supabase.from("profiles").select("id, email").in("id", ids),
+      supabase.from("user_progress").select("user_id, readiness, topic_scores").in("user_id", ids),
+    ]);
+    const roster = members.map((m) => {
+      const p = profilesData?.find((x) => x.id === m.user_id);
+      const prog = progressData?.find((x) => x.user_id === m.user_id);
+      return {
+        userId: m.user_id,
+        email: p?.email || m.user_id,
+        isTeamAdmin: m.is_team_admin,
+        readiness: prog?.readiness || 0,
+        topics: prog?.topic_scores || {},
+      };
+    });
+    setTeamRoster(roster);
+    setRosterLoading(false);
+  }
+
+  useEffect(() => {
+    if (myTeam?.isTeamAdmin) loadTeamRoster();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myTeam?.id, myTeam?.isTeamAdmin]);
+
+  async function toggleTeamAdmin(userId, makeAdmin) {
+    if (!myTeam?.isTeamAdmin) return;
+    const { error } = await supabase.from("team_members").update({ is_team_admin: makeAdmin }).eq("team_id", myTeam.id).eq("user_id", userId);
+    if (!error) setTeamRoster((prev) => prev.map((m) => (m.userId === userId ? { ...m, isTeamAdmin: makeAdmin } : m)));
+  }
+
   // Once both the bank and the session are ready, load THIS account's saved
   // progress from Supabase — not the browser. This is what makes progress
   // follow the person's login instead of the device they happen to be on.
@@ -1424,7 +1665,7 @@ export default function App() {
     if (session) {
       await supabase.from("user_progress").delete().eq("user_id", session.user.id);
     }
-    setTeam(SEED_TEAM);
+    setTeam([]);
     setMissed([]);
     setQuestionStats({});
   }
@@ -1630,7 +1871,7 @@ export default function App() {
   if (session === undefined) {
     return (
       <div style={{ background: CANVAS, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Loader2 className="w-5 h-5 animate-spin" style={{ color: PAPER_2 }} />
+        <Loader2 className="w-5 h-5 animate-spin" style={{ color: INK }} />
       </div>
     );
   }
@@ -1649,9 +1890,9 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         select option { background: ${PAPER}; }
         .pt-btn { border-color: ${INK}; color: ${INK}; background: ${PAPER_2}; transition: border-color .15s ease, color .15s ease, background-color .15s ease; }
-        .pt-btn:hover { border-color: ${AMBER}; color: ${AMBER}; background-color: #FBF3E8; }
-        .pt-btn:active { background-color: #F3E3CB; }
-        .pt-btn.selected { border-color: ${AMBER}; color: ${AMBER}; }
+        .pt-btn:hover { border-color: ${ACCENT}; color: ${ACCENT}; background-color: #E8EDDD; }
+        .pt-btn:active { background-color: #D8E0C6; }
+        .pt-btn.selected { border-color: ${ACCENT}; color: ${ACCENT}; }
         .pt-btn:disabled { pointer-events: none; }
       `}</style>
       <div className="max-w-5xl mx-auto">
@@ -1665,13 +1906,13 @@ export default function App() {
               {[
                 ["practice", "Practice"],
                 ...(profile?.role === "admin" ? [["review", "Review Queue"]] : []),
-                ...(profile?.role === "admin" || profile?.role === "manager" ? [["dashboard", "Manager view"]] : []),
+                ["dashboard", "Team"],
               ].map(([key, label]) => (
                 <button key={key} onClick={() => setView(key)} className={`pt-btn relative px-3 py-1.5 text-xs uppercase tracking-wide rounded-none border flex items-center gap-1.5 ${view === key ? "selected" : ""}`}
                   style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                   {view === key && <CornerTicks variant="two" />}
                   {key === "review" && bank.pending.length > 0 && (
-                    <span className="inline-flex items-center justify-center rounded-full text-[9px] w-4 h-4" style={{ background: AMBER, color: INK }}>{bank.pending.length}</span>
+                    <span className="inline-flex items-center justify-center rounded-full text-[9px] w-4 h-4" style={{ background: ACCENT, color: INK }}>{bank.pending.length}</span>
                   )}
                   {label}
                 </button>
@@ -1713,7 +1954,24 @@ export default function App() {
           <>
             {view === "practice" && <PracticeView key={homeKey} bank={bank} missed={missed} you={you} questionStats={questionStats} isAdmin={profile?.role === "admin"} onRequestGeneration={addPending} onCompleteQuiz={recordResult} />}
             {view === "review" && profile?.role === "admin" && <ReviewQueueView bank={bank} isAdmin={true} onApprove={approve} onReject={reject} onDelete={deleteQuestion} onSaveEdit={saveEdit} onExport={exportBank} onAddQuestion={addQuestion} onRequestGeneration={addPending} diagramSamples={diagramSamples} onAddDiagramSample={addDiagramSample} onDeleteDiagramSample={deleteDiagramSample} onGenerateDiagram={generateDiagramForQuestion} />}
-            {view === "dashboard" && (profile?.role === "admin" || profile?.role === "manager") && <DashboardView team={team} bank={bank} missed={missed} />}
+            {view === "dashboard" && (
+              <TeamView
+                session={session}
+                myTeam={myTeam}
+                teamLoading={teamLoading}
+                teamRoster={teamRoster}
+                rosterLoading={rosterLoading}
+                inviteLink={inviteLink}
+                teamError={teamError}
+                joinStatus={joinStatus}
+                bank={bank}
+                missed={missed}
+                onCreateTeam={createTeam}
+                onGenerateInvite={generateInvite}
+                onToggleAdmin={toggleTeamAdmin}
+                onLeaveTeam={leaveTeam}
+              />
+            )}
           </>
         )}
       </div>
