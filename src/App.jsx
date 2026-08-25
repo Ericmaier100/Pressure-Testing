@@ -1565,9 +1565,9 @@ export default function App() {
   async function createTeam(name) {
     setTeamError(null);
     const { data: newTeam, error: teamErr } = await supabase.from("teams").insert({ name, created_by: session.user.id }).select().single();
-    if (teamErr) { setTeamError("Couldn't create the team. Try again."); return false; }
+    if (teamErr) { console.error("createTeam (teams insert) failed:", teamErr); setTeamError(teamErr.message || "Couldn't create the team. Try again."); return false; }
     const { error: memberErr } = await supabase.from("team_members").insert({ team_id: newTeam.id, user_id: session.user.id, is_team_admin: true });
-    if (memberErr) { setTeamError("Team was created, but couldn't add you to it. Try again."); return false; }
+    if (memberErr) { console.error("createTeam (team_members insert) failed:", memberErr); setTeamError(memberErr.message || "Team was created, but couldn't add you to it. Try again."); return false; }
     setMyTeam({ id: newTeam.id, name: newTeam.name, isTeamAdmin: true });
     return true;
   }
@@ -1584,7 +1584,7 @@ export default function App() {
     if (!myTeam) return;
     setTeamError(null);
     const { data, error } = await supabase.from("team_invites").insert({ team_id: myTeam.id, created_by: session.user.id }).select().single();
-    if (error) { setTeamError("Couldn't create an invite link. Try again."); return; }
+    if (error) { console.error("generateInvite failed:", error); setTeamError(error.message || "Couldn't create an invite link. Try again."); return; }
     setInviteLink(`${window.location.origin}${window.location.pathname}?invite=${data.id}`);
   }
 
